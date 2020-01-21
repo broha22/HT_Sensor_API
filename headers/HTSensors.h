@@ -25,7 +25,7 @@ typedef enum SensorType {
  *  Object: SensorConfig
  *  
  *  Params:
- *    - id: unique integer set for each different sensor
+ *    - id: I2C address of sensor (unique)
  *    - sensor_type: specifies acc, gyr or mag type
  *    - driver_library: sensor manufacturer, for driver support
  *    - x_offset: degree tilt on x axis of hw sensor (+90, -90, 0, +180)
