@@ -4,9 +4,11 @@
 
 /* Generic Sensor Information struct */
 typedef struct sensor{
-    uint8_t addr_imu;
+    uint8_t addr_accel;
+    uint8_t addr_gyro;
     uint8_t addr_mag;
-    int file_desc_imu;
+    int file_desc_accel;
+    int file_desc_gyro;
     int file_desc_mag;
 }sensor;
 
