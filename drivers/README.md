@@ -1,10 +1,10 @@
 # Driver Files
 
-## Lsm9ds1:
+## Lsm9ds1
 - Author: Isaac Grossberg
 - Status: Functioning
 
-## Bno055:
+## Bno055
 - Author: Brogan Miner
 - Status: Functioning
 
