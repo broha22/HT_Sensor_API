@@ -1,6 +1,3 @@
-
-
-
 # all: bno055.o
 # 	gcc -Wall bno055.o -o sensor_api
 
@@ -12,6 +9,9 @@
 
 # bno055_support.o: drivers/bsh/bno055_support.c drivers/bsh/bno055_support.h
 # 	gcc -c bno055_support.c
+
+service: service/service.c
+	gcc service/service.c -o service/service -lrt
 
 
 install:
