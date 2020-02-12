@@ -1,0 +1,8 @@
+create library and systemd service
+
+library handles calls in application
+systemd service handles reading sensors
+
+communicate via posix shared memory (sys/shm.h)
+use ftok() to get the token for shm
+use posix inter-process semaphore

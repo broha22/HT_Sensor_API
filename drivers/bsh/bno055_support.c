@@ -1,18 +1,22 @@
 #include "bno055_support.h"
-s8 I2C_routine(void) {
-	bno055.bus_write = BNO055_I2C_bus_write;
-	bno055.bus_read = BNO055_I2C_bus_read;
-	bno055.delay_msec = BNO055_delay_msek;
-	bno055.dev_addr = BNO055_I2C_ADDR1;
+static int* i2c_fp;
 
-	if ((file_i2c = open("/dev/i2c-1", O_RDWR)) < 0) {
-    return -1;
-  }
-  if(ioctl(file_i2c, I2C_SLAVE, bno055.dev_addr) != 0) {
+s8 I2C_routine(struct bno055_t* bno055, int* file_i2c) {
+	bno055->bus_write = BNO055_I2C_bus_write;
+	bno055->bus_read = BNO055_I2C_bus_read;
+	bno055->delay_msec = BNO055_delay_msek;
+	bno055->dev_addr = BNO055_I2C_ADDR1;
+
+	i2c_fp = file_i2c;
+
+	// if ((file_i2c = open("/dev/i2c-1", O_RDWR)) < 0) {
+  //   return -1;
+  // }
+  if(ioctl(&i2c_fp, I2C_SLAVE, bno055->dev_addr) != 0) {
     return -1;
   }
   u8 reg = BNO055_CHIP_ID_ADDR;
-  if(write(file_i2c, &reg, 1) != 1) {
+  if(write(&i2c_fp, &reg, 1) != 1) {
     return -1;
   }
 
@@ -29,7 +33,7 @@ s8 BNO055_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt) {
 			*(reg_data + stringpos);
 	}
 
-  if (write(file_i2c, array, cnt + 1) != cnt + 1) {
+  if (write(&i2c_fp, array, cnt + 1) != cnt + 1) {
 		printf("Failed to write to the i2c bus.\n");
 	}
   
@@ -41,11 +45,11 @@ s8 BNO055_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt) {
 	u8 array[I2C_BUFFER_LEN] = {BNO055_INIT_VALUE};
 	u8 stringpos = BNO055_INIT_VALUE;
 
-  if (write(file_i2c, &reg_addr, 1) != 1) {
+  if (write(&i2c_fp, &reg_addr, 1) != 1) {
 		printf("Failed to write to the i2c bus.\n");
 	}
   sleep(0.15);
-  if (read(file_i2c, array, cnt) != cnt) {
+  if (read(&i2c_fp, array, cnt) != cnt) {
 		printf("Failed to read from the i2c bus.\n");
 	}
   for (stringpos = BNO055_INIT_VALUE; stringpos < cnt; stringpos++) {

@@ -38,6 +38,7 @@ typedef enum SensorType {
 
 typedef struct SensorConfig {
 	unsigned int id;
+	unsigned int addr;
 	SensorType sensor_type;
 	DriverLibrary driver_library;
 	int x_offset;
@@ -85,6 +86,7 @@ typedef struct SensorRead {
  *    populated.
  *
  */
-
 void read_sensors(int *sensor_count,SensorRead *sensor_readings);
 
+void clear_sensors();
+void load_sensors(char* configFile);
