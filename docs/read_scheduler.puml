@@ -1,0 +1,25 @@
+@startuml
+skinparam dpi 300
+box Initialization
+participant "Start" as start
+participant "Set up\n timer" as set_up
+end box
+box Timer Loop
+participant "Wait" as wait
+end box
+box Timer Fired
+participant "Read \nshared memory" as r_mem
+participant "Read \nsensor config" as s_config
+participant "Read \nsensor" as s_read
+participant "Write \nshared memory" as w_mem
+end box
+
+
+start -> set_up
+set_up -> wait
+wait -> r_mem
+r_mem -> s_config
+s_config -> s_read
+s_read -> w_mem
+w_mem -> wait
+@enduml

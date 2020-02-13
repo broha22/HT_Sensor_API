@@ -1,0 +1,14 @@
+@startuml
+skinparam dpi 300
+participant "Config \nAPI Call" as start
+participant "Read config\n file" as r_file
+participant "Convert text to\n config structures" as con
+participant "Access \nshared memory" as mem
+participant "Write structs\n to memory" as wr
+participant "Return success\n or failure" as ret
+start -> r_file
+r_file -> con
+con -> mem
+mem -> wr
+wr -> ret
+@enduml

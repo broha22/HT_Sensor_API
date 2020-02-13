@@ -1,0 +1,20 @@
+/*
+ * @Author: you@you.you
+ * @Date:   Wednesday February 12th 2020
+ * @Last Modified By:  Brogan Miner
+ * @Last Modified Time:  Wednesday February 12th 2020
+ * @Copyright:  (c) Oregon State University 2020
+ */
+@startuml
+skinparam dpi 300
+participant "Read config \nstruct" as init
+participant "Open file \ndescriptor" as fd
+participant "Tie fd \nto I2C line" as tie
+participant "Call library functions for\n default sensor settings" as def
+participant "Return \nsuccess/failure" as ret
+
+init -> fd
+fd -> tie
+tie -> def
+def -> ret
+@enduml

@@ -1,3 +1,10 @@
+#ifndef HT_SENSORS
+#define HT_SENSORS 
+/* Name used for shared memory space */
+#define SHM_NAME "HT_SENSORS_SHM"
+#define MAX_SENSORS 6
+
+
 /*
  *  Specifies the driver library to be used,
  *  important to signifiy the HW model of sensor.
@@ -37,6 +44,7 @@ typedef enum SensorType {
  */
 
 typedef struct SensorConfig {
+	unsigned int valid;
 	unsigned int id;
 	unsigned int addr;
 	SensorType sensor_type;
@@ -66,7 +74,7 @@ typedef struct SensorRead {
 	double x;
 	double y;
 	double z;
-	unsigned int time;
+	struct timespec time;
 	SensorConfig *sensor;
 } SensorRead;
 
@@ -90,3 +98,4 @@ void read_sensors(int *sensor_count,SensorRead *sensor_readings);
 
 void clear_sensors();
 void load_sensors(char* configFile);
+#endif

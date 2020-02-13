@@ -1,0 +1,17 @@
+/*
+ * @Author: you@you.you
+ * @Date:   Wednesday February 12th 2020
+ * @Last Modified By:  Brogan Miner
+ * @Last Modified Time:  Wednesday February 12th 2020
+ * @Copyright:  (c) Oregon State University 2020
+ */
+@startuml
+skinparam dpi 300
+participant "Read \nAPI Call" as read
+participant "Access \nshared memory" as mem
+participant "Map memory to\n sensor struct" as map
+participant "Return array\n of structs" as ret
+read -> mem
+mem -> map
+map -> ret
+@enduml

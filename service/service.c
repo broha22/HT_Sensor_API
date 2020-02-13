@@ -12,31 +12,102 @@
 #include <signal.h>
 #include <errno.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include <fcntl.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include "../headers/HTSensors.h"
+#include "../headers/HTReadScheduler.h"
+#include <string.h>
 
 
 void handle_timer (union sigval arg) {
-  printf("Hello World\n");
+  /* Read arg ptr into values */
+  unsigned int index = ((HTSigVal*)arg.sival_ptr)->index;
+  unsigned int index_copy = index;
+  void *cfg_top = ((HTSigVal*)arg.sival_ptr)->config_top;
+  void *rd_top = ((HTSigVal*)arg.sival_ptr)->read_top;
+  
+  /* Copy sensor config from shared mem */
+  SensorConfig current_cfg;
+  // memset(&current_cfg, 0, sizeof(SensorConfig));
+  memcpy(&current_cfg, (SensorConfig *)cfg_top + index, sizeof(SensorConfig));
+  printf("%d\n", current_cfg.valid);
+  /* Loop until we get a valid sensor */
+  while (current_cfg.valid != 1) {
+    index = (index + 1) % MAX_SENSORS;
+    /* If no sensors are valid dont loop infinitely */
+    if (index == index_copy) break;
+    memcpy(&current_cfg, (SensorConfig *)cfg_top + index, sizeof(SensorConfig));
+  }
+  printf("%d\n", index);
+  /* Continue processing sensor read */
+  if (current_cfg.valid == 1) {
+    printf("update\n");
+    SensorRead current_rd;
+    memcpy(&current_rd, (SensorRead *)rd_top + index, sizeof(SensorRead));
+
+    current_rd.x += 1;
+    current_rd.y += 1;
+    current_rd.z += 1;
+    clock_gettime(CLOCK_REALTIME, &current_rd.time);
+
+    memcpy((SensorRead *)rd_top + index, &current_rd, sizeof(SensorRead));
+  }
+
+  /* Increase read index */
+  ((HTSigVal*)arg.sival_ptr)->index = (index + 1) % MAX_SENSORS;
 }
 
 int main (int argc, char **argv) {
 
+  /* Open shared memory and get variables ready */
+  int shm_fd;
+  const int shm_size_cfg = (sizeof(SensorConfig) * MAX_SENSORS);
+  const int shm_size_rd = (sizeof(SensorRead) * MAX_SENSORS);
+  const char *shm_name = SHM_NAME;
+  shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0777);
+  ftruncate(shm_fd, shm_size_cfg + shm_size_rd);
+
+  /* Create structure for timer event arg */
+  HTSigVal event_arg;
+  event_arg.index = 0;
+  event_arg.config_top = mmap(0, shm_size_cfg, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  event_arg.read_top = event_arg.config_top + MAX_SENSORS * sizeof(SensorConfig);
+  // event_arg.read_top = mmap(event_arg.config_top, shm_size_rd, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  
+  if (event_arg.config_top == MAP_FAILED) {
+    printf("config_top failed\n");
+    return -1;
+  }
+  if (event_arg.read_top == MAP_FAILED) {
+    printf("read_top failed\n");
+    return -1;
+  }
+
+  /* Create default sensor config and read structs */
+  for (int i = 0; i < MAX_SENSORS; i++) {
+    SensorConfig default_config;
+    memset(&default_config, 0, sizeof(SensorConfig));
+    memcpy((SensorConfig *)event_arg.config_top + i, &default_config, sizeof(SensorConfig));
+    SensorRead default_read;
+    memset(&default_read, 0, sizeof(SensorRead));
+    memcpy((SensorConfig *)event_arg.read_top + i, &default_read, sizeof(SensorRead));
+  }
+
   /* Define timer signal event */
   struct sigevent timer_fired;
+  memset(&timer_fired, 0, sizeof(struct sigevent));
   timer_fired.sigev_notify = SIGEV_THREAD;
-  // timer_fired.sigev_signo = SIGUSR1;
   timer_fired.sigev_notify_function = handle_timer;
   timer_fired.sigev_notify_attributes = NULL;
-  // timer_fired.sigev_value.sival_int = 20;
-  // timer_fired.sigev_notify_thread_id = getpid();
+  timer_fired.sigev_value.sival_ptr = &event_arg;
 
   /* Define timer interval */
   struct itimerspec timer_interval;
-  struct timespec timer_repeat;
-  timer_repeat.tv_sec = 0;        // 0 S
-  timer_repeat.tv_nsec = 1000000; // 1 mS
-  timer_interval.it_interval = timer_repeat;
-  timer_interval.it_interval = timer_repeat;
+  memset(&timer_interval, 0, sizeof(struct itimerspec));
+  timer_interval.it_interval.tv_sec = 0;
+  timer_interval.it_interval.tv_nsec = READ_INTERVAL;
   timer_interval.it_value.tv_nsec = 1;
   timer_interval.it_value.tv_sec = 0;
 
@@ -54,5 +125,7 @@ int main (int argc, char **argv) {
   /* Loop forever */
   while(1){}
 
+  // Probably should capture sigterm unlink this
+  shm_unlink(shm_name);
   return 0;
 }

@@ -1,0 +1,13 @@
+@startuml
+skinparam dpi 300
+participant "Library call" as lib
+participant "Map call\n to read or write" as rw
+participant "Map call destination \nto register address" as Map
+participant "Write and read data \nto/from I2C line" as write
+participant "Return data \nor success/error" as ret
+
+lib -> rw
+rw -> Map
+Map -> write
+write -> ret
+@enduml

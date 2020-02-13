@@ -10,8 +10,9 @@
 # bno055_support.o: drivers/bsh/bno055_support.c drivers/bsh/bno055_support.h
 # 	gcc -c bno055_support.c
 
-service: service/service.c
+service: service/service.c test/service_ipc.c
 	gcc service/service.c -o service/service -lrt
+	gcc test/service_ipc.c -o test/service_ipc -lrt
 
 
 install:
