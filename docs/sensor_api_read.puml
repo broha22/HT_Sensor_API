@@ -1,11 +1,4 @@
-/*
- * @Author: you@you.you
- * @Date:   Wednesday February 12th 2020
- * @Last Modified By:  Brogan Miner
- * @Last Modified Time:  Wednesday February 12th 2020
- * @Copyright:  (c) Oregon State University 2020
- */
-@startuml
+@startuml api_read
 skinparam dpi 300
 participant "Read \nAPI Call" as read
 participant "Access \nshared memory" as mem

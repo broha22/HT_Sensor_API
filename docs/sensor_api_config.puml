@@ -1,4 +1,4 @@
-@startuml
+@startuml api_config
 skinparam dpi 300
 participant "Config \nAPI Call" as start
 participant "Read config\n file" as r_file

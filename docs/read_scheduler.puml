@@ -1,4 +1,4 @@
-@startuml
+@startuml read_sched
 skinparam dpi 300
 box Initialization
 participant "Start" as start
