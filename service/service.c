@@ -5,6 +5,7 @@
  * @Last Modified Time:  Tuesday February 11th 2020
  * @Copyright:  (c) Oregon State University 2020
  */
+// TODO: clean up header includes
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -19,6 +20,71 @@
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 #include <string.h>
+#include <wiringPi.h>
+#include "../drivers/bsh/bno055_support.h"
+#include "../drivers/bsh/nxp_support.h"
+#include "../drivers/bsh/bno055_support.h"
+
+
+void toggle_e_magnet(int on) {
+  if (on == 1) {
+    digitalWrite(E_MAG_PIN, 1);
+  } else {
+    digitalWrite(E_MAG_PIN, 0);
+  }
+}
+
+void read_sensor(SensorRead *read) {
+  struct sensor sensor;
+  switch (read->sensor->sensor_type) {
+    case Gyr:
+      switch (read->sensor->driver_library) {
+        case BSH:
+
+          break;
+        case LSM:
+          break;
+        case NXP:
+          break;
+        default:
+          return;
+      }
+      break;
+    case Acc:
+      switch (read->sensor->driver_library) {
+        case BSH:
+          break;
+        case LSM:
+          break;
+        case NXP:
+          break;
+        default:
+          return;
+      }
+      break;
+    case Mag:
+      toggle_e_magnet(1);
+      switch (read->sensor->driver_library) {
+        case BSH:
+          break;
+        case LSM:
+          break;
+        case NXP:
+          break;
+        default:
+          return;
+      }
+      toggle_e_magnet(0);
+      break;
+    default:
+      return;
+  }
+
+  current_rd.x += 1;
+  current_rd.y += 1;
+  current_rd.z += 1;
+  clock_gettime(CLOCK_REALTIME, &current_rd.time);
+}
 
 
 void handle_timer (union sigval arg) {
@@ -30,36 +96,56 @@ void handle_timer (union sigval arg) {
   
   /* Copy sensor config from shared mem */
   SensorConfig current_cfg;
-  // memset(&current_cfg, 0, sizeof(SensorConfig));
   memcpy(&current_cfg, (SensorConfig *)cfg_top + index, sizeof(SensorConfig));
-  printf("%d\n", current_cfg.valid);
+  
   /* Loop until we get a valid sensor */
-  while (current_cfg.valid != 1) {
+  while (current_cfg.addr == 0) {
     index = (index + 1) % MAX_SENSORS;
     /* If no sensors are valid dont loop infinitely */
     if (index == index_copy) break;
     memcpy(&current_cfg, (SensorConfig *)cfg_top + index, sizeof(SensorConfig));
   }
-  printf("%d\n", index);
-  /* Continue processing sensor read */
-  if (current_cfg.valid == 1) {
-    printf("update\n");
-    SensorRead current_rd;
-    memcpy(&current_rd, (SensorRead *)rd_top + index, sizeof(SensorRead));
 
-    current_rd.x += 1;
-    current_rd.y += 1;
-    current_rd.z += 1;
-    clock_gettime(CLOCK_REALTIME, &current_rd.time);
-
-    memcpy((SensorRead *)rd_top + index, &current_rd, sizeof(SensorRead));
+  //TODO: Make this work with more than one of each board
+  struct sensor sensor;
+  /* Set up sensor if it is not set up yet */
+  if (current_cfg.valid == 0) {
+    switch (current_cfg.driver_library) {
+      case BSH:
+        Configure_bsh(&sensor);
+        break;
+      case LSM:
+        Configure_lsm(&sensor);
+        break;
+      case NXP:
+        Configure_nxp(&sensor);
+        break;
+      default:
+        current_cfg.addr = 0;
+        break;
+    }
+    memcpy((SensorConfig *)cfg_top + index, &current_cfg, sizeof(SensorConfig));
+    if (current_cfg.addr == 0) {
+      return;
+    }
   }
+  
+  /* Continue processing sensor read */
+  SensorRead current_rd;
+  memcpy(&current_rd, (SensorRead *)rd_top + index, sizeof(SensorRead));
+  read_sensor(&current_rd);
+  memcpy((SensorRead *)rd_top + index, &current_rd, sizeof(SensorRead));
 
   /* Increase read index */
   ((HTSigVal*)arg.sival_ptr)->index = (index + 1) % MAX_SENSORS;
 }
 
 int main (int argc, char **argv) {
+
+  /* Set up electromagnet pin for output */
+  if (wiringPiSetup () == -1)
+    return -1;
+  pinMode (E_MAG_PIN, OUTPUT);
 
   /* Open shared memory and get variables ready */
   int shm_fd;
