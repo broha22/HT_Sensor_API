@@ -74,7 +74,7 @@ int Configure_lsm(struct sensor* lsm)
   ret += lsm9ds1_block_data_update_set(&dev_ctx_mag, &dev_ctx_imu, PROPERTY_ENABLE);
 
   /* Set full scale */
-  ret += lsm9ds1_xl_full_scale_set(&dev_ctx_imu, LSM9DS1_4g);
+  ret += lsm9ds1_xl_full_scale_set(&dev_ctx_imu, LSM9DS1_2g);
   ret += lsm9ds1_gy_full_scale_set(&dev_ctx_imu, LSM9DS1_2000dps);
   ret += lsm9ds1_mag_full_scale_set(&dev_ctx_mag, LSM9DS1_16Ga);
 
@@ -123,10 +123,16 @@ double* Read_lsm_accel(struct sensor* lsm)
   double* accel_readings;
   memset(data_raw_acceleration.u8bit, 0x00, 3 * sizeof(int16_t));
   lsm9ds1_acceleration_raw_get(&dev_ctx_imu, data_raw_acceleration.u8bit);
+  
+  /* Convert raw data to units */
+  // FS = 2G -> 0.061 mg/LSB
+  // FS = 4G -> 0.122 mg/LSB
+  // FS = 8G -> 0.244 mg/LSB
+  // FS = 16G -> 0.732 mg/LSB
 
-  acceleration_mg[0] = (double) data_raw_acceleration.i16bit[0] * 0.122;
-  acceleration_mg[1] = (double) data_raw_acceleration.i16bit[1] * 0.122;
-  acceleration_mg[2] = (double) data_raw_acceleration.i16bit[2] * 0.122;
+  acceleration_mg[0] = (double) data_raw_acceleration.i16bit[0] * 0.061;
+  acceleration_mg[1] = (double) data_raw_acceleration.i16bit[1] * 0.061;
+  acceleration_mg[2] = (double) data_raw_acceleration.i16bit[2] * 0.061;
 
   return acceleration_mg;
  }
@@ -157,6 +163,11 @@ double* Read_lsm_accel(struct sensor* lsm)
 
     memset(data_raw_angular_rate.u8bit, 0x00, 3 * sizeof(int16_t));
     lsm9ds1_angular_rate_raw_get(&dev_ctx_imu, data_raw_angular_rate.u8bit);
+
+    /* Convert raw data to units */
+    // FS = 245 dps -> 8.75 mdps/LSB
+    // FS = 500 dps -> 17.5 mdps/LSB
+    // FS = 2000 dps -> 70 mdps/LSB
 
     angular_rate_mdps[0] = (double) data_raw_angular_rate.i16bit[0] * 70.0;
     angular_rate_mdps[1] = (double) data_raw_angular_rate.i16bit[1] * 70.0;
@@ -191,6 +202,12 @@ double* Read_lsm_accel(struct sensor* lsm)
 
     memset(data_raw_magnetic_field.u8bit, 0x00, 3 * sizeof(int16_t));
     lsm9ds1_magnetic_raw_get(&dev_ctx_mag, data_raw_magnetic_field.u8bit);
+
+    /* Convert raw data to units */
+    // FS = 4 gauss -> 0.14 mg/LSB
+    // FS = 8 gauss -> 0.29 mg/LSB
+    // FS = 12 gauss -> 0.43 mg/LSB
+    // FS = 16 gauss -> 0.58 mg/LSB
 
     magnetic_field_mgauss[0] = (double) data_raw_magnetic_field.i16bit[0] * 0.58;
     magnetic_field_mgauss[1] = (double) data_raw_magnetic_field.i16bit[1] * 0.58;
@@ -246,20 +263,32 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
   if (len == 1) {
     result = wiringPiI2CReadReg8(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 2) {
     result = wiringPiI2CReadReg16(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 6) {
-    int x_result = wiringPiI2CReadReg16(*fd, reg);
-    int y_result = wiringPiI2CReadReg16(*fd, reg+2);
-    int z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    uint16_t x_result = wiringPiI2CReadReg16(*fd, reg);
+    //printf("Raw read %X from register %X\n", x_result, reg);
+    uint16_t y_result = wiringPiI2CReadReg16(*fd, reg+2);
+    //printf("Raw read %X from register %X\n", y_result, reg+2);
+    uint16_t z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    //printf("Raw read %X from register %X\n", z_result, reg+4);
     *bufp = x_result;
+    *(bufp+1) = x_result >> 8;
     *(bufp+2) = y_result;
+    *(bufp+3) = y_result >> 8;
     *(bufp+4) = z_result;
+    *(bufp+5) = z_result >> 8;
+
+    /*int i;
+    for (i=0; i<6; i++) {
+      printf("Read %X from register %X\n", (uint8_t) *(bufp+i),reg+i);
+    }*/
   }
   else { return 1; }
-  //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   return 0;
 }

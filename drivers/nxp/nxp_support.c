@@ -12,7 +12,6 @@
  * Fix unit conversion for accel
  * Fix unit conversion for mag
  * Fix unit conversion for gyro
- * Add in function to close file descriptors
 
 
 /* Includes ------------------------------------------------------------------*/
@@ -80,11 +79,15 @@ int Configure_nxp(struct sensor* nxp) {
   }
   
   /* Put device in reset */
-  write_buf = 0x00;
+  write_buf = 0x00; //[0] = 0b0 sets standby mode
   ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x20;
+  /* Wait for system mode to update to standy */
+  do {
+    platform_read(&fd_fxos, FXOS8700_SYSMOD, &read_buf, 1);
+  }while ( (read_buf & 0x03) != 0x00);
+  write_buf = 0x40; //[6] = magnetic one-shot reset
   ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x40;
+  write_buf = 0x40; //[6] = software reset
   ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
   do {
     platform_read(&fd_fxas, FXAS21002_CTRLREG1, &read_buf, 1);
@@ -92,7 +95,8 @@ int Configure_nxp(struct sensor* nxp) {
 
   /* Set mode to accel + mag */
   // [1:0] = 0b11 Hybrid mode (both sensors active)
-  write_buf = 0x03;
+  // [4:2] = 0b111 Max Over sampling rate (16)
+  write_buf = 0x1F;
   ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
 
   /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
@@ -103,13 +107,15 @@ int Configure_nxp(struct sensor* nxp) {
   // Magnetic range fixed to 1200 uT
   // Accel range 2g ([1:0] = 0b00)
   // Mag range 500 dps
-  write_buf = 0x00;
+  //write_buf = 0x00; //0x10 for highpass enable
+  write_buf = 0x10;
   ret += platform_write(&fd_fxos, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
   write_buf = 0x03;
   ret += platform_write(&fd_fxas, FXAS21002_CTRLREG0, &write_buf, 1);
 
   /* Set output data rates + set active */
-  write_buf = 0x01;
+  // [3] on FXOS enables reduced noise mode
+  write_buf = 0x05;
   ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
   write_buf = 0x02;
   ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
@@ -148,6 +154,10 @@ double* Read_nxp_accel(struct sensor* nxp) {
   // Range: 2g, Units: 0.244 mg/LSB
   // Range: 4g, Units: 0.488 mg/LSB 
   // Range: 8g, Units: 0.976 mg/LSB  
+  //acceleration_mg[0] = (double) undoComplement((data_raw_accel.i16bit[0] >> 2) * 0.244);
+  //acceleration_mg[1] = (double) undoComplement((data_raw_accel.i16bit[1] >> 2) * 0.244);
+  //acceleration_mg[2] = (double) undoComplement((data_raw_accel.i16bit[2] >> 2) * 0.244);
+
   acceleration_mg[0] = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
   acceleration_mg[1] = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
   acceleration_mg[2] = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
@@ -181,10 +191,13 @@ double* Read_nxp_accel(struct sensor* nxp) {
   // Range: 1000, Units: 31.25 mdps/LSB
   // Range: 500, Units: 15.625 mdps/LSB
   // Range: 250, Units: 7.8125 mdps/LSB
+  //angular_rate_mdps[0] = (double) undoComplement(data_raw_gyro.i16bit[0] * 15.625);
+  //angular_rate_mdps[1] = (double) undoComplement(data_raw_gyro.i16bit[1] * 15.625);
+  //angular_rate_mdps[2] = (double) undoComplement(data_raw_gyro.i16bit[2] * 15.625);
+
   angular_rate_mdps[0] = (double) data_raw_gyro.i16bit[0] * 15.625;
   angular_rate_mdps[1] = (double) data_raw_gyro.i16bit[1] * 15.625;
   angular_rate_mdps[2] = (double) data_raw_gyro.i16bit[2] * 15.625;
-
     
   return angular_rate_mdps;
  }
@@ -214,6 +227,10 @@ double* Read_nxp_accel(struct sensor* nxp) {
   /* Convert mag data */
   // Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
   // Conveniently, raw data is already in desired format
+  //magnetic_field_mgauss[0] = (double) undoComplement(data_raw_mag.i16bit[0]);
+  //magnetic_field_mgauss[1] = (double) undoComplement(data_raw_mag.i16bit[1]);
+  //magnetic_field_mgauss[2] = (double) undoComplement(data_raw_mag.i16bit[2]);
+
   magnetic_field_mgauss[0] = (double) data_raw_mag.i16bit[0];
   magnetic_field_mgauss[1] = (double) data_raw_mag.i16bit[1];
   magnetic_field_mgauss[2] = (double) data_raw_mag.i16bit[2];
@@ -267,20 +284,32 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
   if (len == 1) {
     result = wiringPiI2CReadReg8(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 2) {
     result = wiringPiI2CReadReg16(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 6) {
-    int x_result = wiringPiI2CReadReg16(*fd, reg);
-    int y_result = wiringPiI2CReadReg16(*fd, reg+2);
-    int z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    uint16_t x_result = wiringPiI2CReadReg16(*fd, reg);
+    //printf("Raw read %X from register %X\n", x_result, reg);
+    uint16_t y_result = wiringPiI2CReadReg16(*fd, reg+2);
+    //printf("Raw read %X from register %X\n", y_result, reg+2);
+    uint16_t z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    //printf("Raw read %X from register %X\n", z_result, reg+4);
     *bufp = x_result;
+    *(bufp+1) = x_result >> 8;
     *(bufp+2) = y_result;
+    *(bufp+3) = y_result >> 8;
     *(bufp+4) = z_result;
+    *(bufp+5) = z_result >> 8;
+
+    /*int i;
+    for (i=0; i<6; i++) {
+      printf("Read %X from register %X\n", (uint8_t) *(bufp+i),reg+i);
+    }*/
   }
   else { return 1; }
-  //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   return 0;
 }

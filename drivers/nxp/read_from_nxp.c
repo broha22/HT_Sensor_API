@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 /* Generic Sensor Information struct */
 typedef struct sensor{
@@ -31,9 +32,10 @@ int main() {
   double* gyro_return;
   double* mag_return;
 
+
   if (result == 0) {
     while(1) {
-    
+      
       accel_return = Read_nxp_accel(&nxp);
       gyro_return = Read_nxp_gyro(&nxp);
       mag_return = Read_nxp_mag(&nxp);
@@ -56,6 +58,9 @@ int main() {
 
       printf("MAG - [mG]: x:%4.2f\ty:%4.2f\tz:%4.2f\r\n",
               nxp_mag_readings[0], nxp_mag_readings[1], nxp_mag_readings[2]);
+ 
+      usleep(500 * 1000); // 500 ms
+ 
     }
   }
   else { printf("Configure returned %d", result); }

@@ -33,7 +33,7 @@ int main() {
 
   if (result == 0) {
     while(1) {
-    
+   
       accel_return = Read_lsm_accel(&lsm9ds1);
       gyro_return = Read_lsm_gyro(&lsm9ds1);
       mag_return = Read_lsm_mag(&lsm9ds1);

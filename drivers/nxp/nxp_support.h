@@ -1,9 +1,9 @@
 /*
  ******************************************************************************
- * @file    lsm9ds1_support.h
+ * @file    nxp_support.h
  * @author  Isaac Grossberg
  * @brief   This file declares variables and functions used in the
- *          lsm9ds1_support.c file
+ *          nxp_support.c file
  *
  ******************************************************************************
  */
@@ -29,6 +29,7 @@
 #define FXOS8700_X_OUT_MSB      0x01
 #define FXOS8700_M_OUT_X_MSB    0x33
 #define FXOS8700_M_STATUS       0x32
+#define FXOS8700_SYSMOD         0x0B
 
 #define FXAS21002_WHOAMI        0x0C
 #define FXAS21002_WHOAMI_VAL    0xD7
