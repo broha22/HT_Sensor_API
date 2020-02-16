@@ -15,10 +15,6 @@
 
 
 /* Includes ------------------------------------------------------------------*/
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <wiringPiI2C.h>
 #include "nxp_support.h"
 
 uint16_t undoComplement(uint16_t val) {

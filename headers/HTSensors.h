@@ -4,6 +4,7 @@
 #define SHM_NAME "HT_SENSORS_SHM"
 #define MAX_SENSORS 6
 
+#include <time.h>
 
 /*
  *  Specifies the driver library to be used,

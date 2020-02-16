@@ -2,27 +2,38 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include "../../headers/HTSensors.h"
 
 /* Generic Sensor Information struct */
-typedef struct sensor{
+/*typedef struct sensor{
     uint8_t addr_accel;
     uint8_t addr_gyro;
     uint8_t addr_mag;
     int file_desc_accel;
     int file_desc_gyro;
     int file_desc_mag;
-}sensor;
+}sensor;*/
 
 /* Function declarations */
-int Configure_nxp(struct sensor* nxp);
-double* Read_nxp_accel(struct sensor* nxp);
-double* Read_nxp_gyro(struct sensor* nxp);
-double* Read_nxp_mag(struct sensor* nxp);
+int Configure_nxp(struct SensorConfig*);
+double* Read_nxp_accel(struct SensorConfig*);
+double* Read_nxp_gyro(struct SensorConfig*);
+double* Read_nxp_mag(struct SensorConfig*);
 
 int main() {
-  struct sensor nxp;
+  struct SensorConfig nxp_accel;
+  nxp_accel.sensor_type = 1;
+  nxp_accel.addr = 0x1F; 
+  struct SensorConfig nxp_gyro;
+  nxp_gyro.sensor_type = 0;
+  nxp_gyro.addr = 0x21;
+  struct SensorConfig nxp_mag;
+  nxp_mag.sensor_type = 2;
+  nxp_mag.addr = 0x1F;
     
-  int result = Configure_nxp(&nxp);
+  int result1 = Configure_nxp(&nxp_accel);
+  int result2 = Configure_nxp(&nxp_gyro);
+  int result3 = Configure_nxp(&nxp_mag);
 
   double nxp_accel_readings[3];
   double nxp_gyro_readings[3];
@@ -33,12 +44,12 @@ int main() {
   double* mag_return;
 
 
-  if (result == 0) {
+  if (result1 == 0 && result2 == 0 && result3 == 0) {
     while(1) {
       
-      accel_return = Read_nxp_accel(&nxp);
-      gyro_return = Read_nxp_gyro(&nxp);
-      mag_return = Read_nxp_mag(&nxp);
+      accel_return = Read_nxp_accel(&nxp_accel);
+      gyro_return = Read_nxp_gyro(&nxp_gyro);
+      mag_return = Read_nxp_mag(&nxp_mag);
 
       nxp_accel_readings[0] = *(accel_return);
       nxp_accel_readings[1] = *(accel_return+1);
