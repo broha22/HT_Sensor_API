@@ -47,16 +47,16 @@ int Configure_lsm(struct SensorConfig* lsm)
     return -1;
   }
 
+  /* Fill struct with new fd */
   lsm->fd = fd;
 
   int ret = 0;  // Accumulation of return values
   uint8_t write_buf, read_buf;
   uint8_t mask;
 
-  /* If sensor is accel or gyro, set up IMU */
-  if (lsm->sensor_type == 1 || lsm->sensor_type == 0) {
+  if (lsm->sensor_type == Acc || lsm->sensor_type == Gyr) {
     
-    /* Initialize inertial sensors (IMU) driver interface */
+    /* Initialize IMU driver interface */
     stmdev_ctx_t dev_ctx_imu;
     dev_ctx_imu.write_reg = platform_write;
     dev_ctx_imu.read_reg = platform_read;
@@ -88,7 +88,6 @@ int Configure_lsm(struct SensorConfig* lsm)
     ret += lsm9ds1_xl_full_scale_set(&dev_ctx_imu, LSM9DS1_2g);
     ret += lsm9ds1_gy_full_scale_set(&dev_ctx_imu, LSM9DS1_2000dps);
 
-    /* Configure filtering chain - See datasheet for filtering chain details */
     /* Accelerometer filtering chain */
     ret += lsm9ds1_xl_filter_aalias_bandwidth_set(&dev_ctx_imu, LSM9DS1_AUTO);
     ret += lsm9ds1_xl_filter_lp_bandwidth_set(&dev_ctx_imu, LSM9DS1_LP_ODR_DIV_50);
@@ -102,7 +101,7 @@ int Configure_lsm(struct SensorConfig* lsm)
     ret += lsm9ds1_imu_data_rate_set(&dev_ctx_imu, LSM9DS1_IMU_59Hz5);
 
   }
-  else if (lsm->sensor_type == 2) {
+  else if (lsm->sensor_type == Mag) {
     
     /* Initialize magnetic sensors driver interface */
     stmdev_ctx_t dev_ctx_mag;

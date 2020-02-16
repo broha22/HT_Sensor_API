@@ -70,10 +70,10 @@ int main() {
       printf("MAG - [mG]: x:%4.2f\ty:%4.2f\tz:%4.2f\r\n",
               nxp_mag_readings[0], nxp_mag_readings[1], nxp_mag_readings[2]);
  
-      usleep(500 * 1000); // 500 ms
+      usleep(50 * 1000); // 500 ms
  
     }
   }
-  else { printf("Configure returned %d", result); }
+  else { printf("Configure returned %d %d %d", result1, result2, result3); }
   return 0;
 }

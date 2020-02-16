@@ -54,20 +54,10 @@
 #define FXAS21002_STATUS        0x07
 
 /* Struct Declarations */
-
 typedef union{
   int16_t i16bit[3];
   uint8_t u8bit[6];
 } axis3bit16_t;
-
-/*typedef struct sensor{
-  uint8_t addr_accel;
-  uint8_t addr_gyro;
-  uint8_t addr_mag;
-  int file_desc_accel;
-  int file_desc_gyro;
-  int file_desc_mag;
-} sensor;*/
 
 /* Private variables */
 static axis3bit16_t data_raw_accel;

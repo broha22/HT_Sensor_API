@@ -8,12 +8,6 @@
  ******************************************************************************
  */
 
-/* TODO:
- * Fix unit conversion for accel
- * Fix unit conversion for mag
- * Fix unit conversion for gyro
-
-
 /* Includes ------------------------------------------------------------------*/
 #include "nxp_support.h"
 
@@ -42,79 +36,102 @@ uint16_t undoComplement(uint16_t val) {
  *                I2C addresses and file descriptors for communication
  *
  */
-int Configure_nxp(struct sensor* nxp) {
-  
-  uint8_t fxos_i2c_add = 0x1F;
-  uint8_t fxas_i2c_add = 0x21;
+int Configure_nxp(struct SensorConfig* nxp) {
+
+  /* Set up I2C Comunication */
+  int fd = wiringPiI2CSetup(nxp->addr);
+  if (fd < 0) {
+    printf("I2C Setup failed\n");
+    return -1;
+  }
+
+  /* Fill struct with new fd */
+  nxp->fd = fd;
+
+  int ret = 0;
   uint8_t write_buf;
   uint8_t read_buf;
 
-  /* Set up I2C Communication */
-  int fd_fxos = wiringPiI2CSetup(fxos_i2c_add);
-  int fd_fxas = wiringPiI2CSetup(fxas_i2c_add);
+  if (nxp->sensor_type == Acc || nxp->sensor_type == Mag) {
+    
+    /* Check Device ID and compare against WhoAmI */
+    ret += platform_read(&fd, FXOS8700_WHOAMI, &read_buf, 1);
+    if (read_buf != FXOS8700_WHOAMI_VAL) {
+      printf("Device not found\n");
+      return -1;
+    }
 
-  /* Fill in sensor struct */
-  nxp->addr_accel = fxos_i2c_add;
-  nxp->addr_gyro = fxas_i2c_add;
-  nxp->addr_mag = fxos_i2c_add;
-  nxp->file_desc_accel = fd_fxos;
-  nxp->file_desc_gyro = fd_fxas;
-  nxp->file_desc_mag = fd_fxos;
+    /* Reset device */      
+    write_buf = 0x00; //[0] = 0b0 sets standby mode
+    ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
+    do { /* Wait for system mode to update to standy */
+      platform_read(&fd, FXOS8700_SYSMOD, &read_buf, 1);
+    }while ( (read_buf & 0x03) != 0x00);
+    
+    /* Reset mag */
+    //[6] Magnetic one-shot reset
+    write_buf = 0x40;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
 
-  /* Check Device ID and compare against WhoAmI */
-  int ret = platform_read(&fd_fxos, FXOS8700_WHOAMI, &read_buf, 1);
-  if (read_buf != FXOS8700_WHOAMI_VAL) {
-    printf("Device not found\n");
+    /* Set mode to accel + mag
+     * [1:0] = 0b11 Hybrid mode (both sensors active)
+     * [4:2] = 0b111 Max Over sampling rate (16)
+     */
+    write_buf = 0x1F;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
+
+    /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
+    write_buf = 0x00;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG2, &write_buf, 1);
+
+
+    /* Set ranges on sensors
+     * Magnetic range fixed to 1200 uT
+     * Accel range 2g ([1:0] = 0b00)
+     * Mag range 500 dps
+     * [4] HPF enable
+     */
+    write_buf = 0x10;
+    ret += platform_write(&fd, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
+
+
+    /* Set output data rates + set active */
+    // [3] Reduced noise mode enable
+    write_buf = 0x05;
+    ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
+
+  }
+  else if (nxp->sensor_type == Gyr) {
+    
+    /* Check Device ID and compare against WhoAmI */    
+    ret += platform_read(&fd, FXAS21002_WHOAMI, &read_buf, 1);
+    if (read_buf != FXAS21002_WHOAMI_VAL) {
+      printf("Device not found\n");
+      return -1;
+    }
+
+    /* Reset device
+     * [6] Software Reset
+     */
+    write_buf = 0x40;
+    ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
+    do {
+      platform_read(&fd, FXAS21002_CTRLREG1, &read_buf, 1);
+    }while (read_buf == 0x40);
+
+    /* Set range */
+    write_buf = 0x03;
+    ret += platform_write(&fd, FXAS21002_CTRLREG0, &write_buf, 1);
+    
+    /* Set ODR + set active */
+    write_buf = 0x02;
+    ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
+
+  }
+  else {
+    printf("Invalid Sensor type\n");
     return -1;
   }
-
-  ret += platform_read(&fd_fxas, FXAS21002_WHOAMI, &read_buf, 1);
-  if (read_buf != FXAS21002_WHOAMI_VAL) {
-    printf("Device not found\n");
-    return -1;
-  }
-  
-  /* Put device in reset */
-  write_buf = 0x00; //[0] = 0b0 sets standby mode
-  ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
-  /* Wait for system mode to update to standy */
-  do {
-    platform_read(&fd_fxos, FXOS8700_SYSMOD, &read_buf, 1);
-  }while ( (read_buf & 0x03) != 0x00);
-  write_buf = 0x40; //[6] = magnetic one-shot reset
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x40; //[6] = software reset
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
-  do {
-    platform_read(&fd_fxas, FXAS21002_CTRLREG1, &read_buf, 1);
-  }while (read_buf == 0x40);
-
-  /* Set mode to accel + mag */
-  // [1:0] = 0b11 Hybrid mode (both sensors active)
-  // [4:2] = 0b111 Max Over sampling rate (16)
-  write_buf = 0x1F;
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
-
-  /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
-  write_buf = 0x00;
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG2, &write_buf, 1);
-
-  /* Set ranges on sensors */
-  // Magnetic range fixed to 1200 uT
-  // Accel range 2g ([1:0] = 0b00)
-  // Mag range 500 dps
-  //write_buf = 0x00; //0x10 for highpass enable
-  write_buf = 0x10;
-  ret += platform_write(&fd_fxos, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
-  write_buf = 0x03;
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG0, &write_buf, 1);
-
-  /* Set output data rates + set active */
-  // [3] on FXOS enables reduced noise mode
-  write_buf = 0x05;
-  ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x02;
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
 
   /* Wait necessary transition time from standby to active time (6ms) */
   usleep(6 * 1000);
@@ -129,11 +146,11 @@ int Configure_nxp(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
-double* Read_nxp_accel(struct sensor* nxp) {
+double* Read_nxp_accel(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_accel;
+  int fd = nxp->fd;
 
   /* Check if accel data ready */
   // [2:0] = 0b111 X,Y,Z data ready
@@ -168,11 +185,11 @@ double* Read_nxp_accel(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_gyro(struct sensor* nxp) {
+ double* Read_nxp_gyro(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_gyro;
+  int fd = nxp->fd;
 
   /* Check if data ready */
   do {
@@ -205,11 +222,11 @@ double* Read_nxp_accel(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_mag(struct sensor* nxp) {
+ double* Read_nxp_mag(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_mag;
+  int fd = nxp->fd;
 
   /* Wait for mag data ready */
   // [2:0] = 0b111 X,Y,Z data ready
