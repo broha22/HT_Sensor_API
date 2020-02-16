@@ -9,13 +9,14 @@
  */
 
 /* Includes ------------------------------------------------------------------*/
-
+#include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <wiringPiI2C.h>
+#include "../../headers/HTSensors.h"
 
 /* Register Address definitions */
 
@@ -53,19 +54,13 @@
 
 /* Struct Declarations */
 
+#ifndef axis3bit16_t
+#define axis3bit16_t
 typedef union{
   int16_t i16bit[3];
   uint8_t u8bit[6];
 } axis3bit16_t;
-
-typedef struct sensor{
-  uint8_t addr_accel;
-  uint8_t addr_gyro;
-  uint8_t addr_mag;
-  int file_desc_accel;
-  int file_desc_gyro;
-  int file_desc_mag;
-} sensor;
+#endif
 
 /* Private variables */
 static axis3bit16_t data_raw_accel;
@@ -79,7 +74,7 @@ static double magnetic_field_mgauss[3];
 static int32_t platform_write(void* handle, uint8_t reg, uint8_t* bufp, uint16_t len);
 static int32_t platform_read(void* handle, uint8_t reg, uint8_t* bufp, uint16_t len);
 
-int Configure_nxp(struct sensor* lsm);
-double* Read_nxp_accel(struct sensor* lsm);
-double* Read_nxp_gyro(struct sensor* lsm);
-double* Read_nxp_mag(struct sensor* lsm);
+int configure_nxp(SensorConfig* lsm);
+double* read_nxp_acc(SensorConfig* lsm);
+double* read_nxp_gyr(SensorConfig* lsm);
+double* read_nxp_mag(SensorConfig* lsm);
