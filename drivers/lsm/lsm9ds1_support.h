@@ -8,10 +8,16 @@
  ******************************************************************************
  */
 
-/* Includes */
+/* Includes ------------------------------------------------------------------*/
 #include "../../headers/HTSensors.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <wiringPiI2C.h>
+#include "lsm9ds1_reg.h"
 
-/* Struct Declarations */
+/* Struct Declarations -------------------------------------------------------*/
 typedef union{
   int16_t i16bit[3];
   uint8_t u8bit[6];
@@ -33,12 +39,8 @@ typedef struct SensorConfig {
 static axis3bit16_t data_raw_acceleration;
 static axis3bit16_t data_raw_angular_rate;
 static axis3bit16_t data_raw_magnetic_field;
-static double acceleration_mg[3];
-static double angular_rate_mdps[3];
-static double magnetic_field_mgauss[3];
 static lsm9ds1_id_t whoamI;
 static lsm9ds1_status_t reg;
-static uint8_t rst;
 
 /* Extern variables ----------------------------------------------------------*/
 
@@ -49,7 +51,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
                              uint16_t len);
 
 /* Extern functions ----------------------------------------------------------*/
-int Configure_lsm(struct SensorConfig*);
-double* Read_lsm_accel(struct SensorConfig*);
-double* Read_lsm_gyro(struct SensorConfig*);
-double* Read_lsm_mag(struct SensorConfig*);
+int configure_lsm(struct SensorConfig*);
+double* read_lsm_acc(struct SensorConfig*);
+double* read_lsm_gyr(struct SensorConfig*);
+double* read_lsm_mag(struct SensorConfig*);

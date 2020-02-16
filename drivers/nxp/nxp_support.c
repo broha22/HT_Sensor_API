@@ -8,9 +8,13 @@
  ******************************************************************************
  */
 
-/* Includes ------------------------------------------------------------------*/
 #include "nxp_support.h"
 
+/*
+ * @brief  Undo the two's complement of a 16-bit value
+ * 
+ * @param  val  16-bit value in two's complement form
+ */
 uint16_t undoComplement(uint16_t val) {
   
   uint16_t mask = 0x8000;
@@ -34,9 +38,8 @@ uint16_t undoComplement(uint16_t val) {
  *
  * @param  lsm    sensor struct containing information about
  *                I2C addresses and file descriptors for communication
- *
  */
-int Configure_nxp(struct SensorConfig* nxp) {
+int configure_nxp(struct SensorConfig* nxp) {
 
   /* Set up I2C Comunication */
   int fd = wiringPiI2CSetup(nxp->addr);
@@ -44,7 +47,7 @@ int Configure_nxp(struct SensorConfig* nxp) {
     printf("I2C Setup failed\n");
     return -1;
   }
-
+    
   /* Fill struct with new fd */
   nxp->fd = fd;
 
@@ -146,11 +149,14 @@ int Configure_nxp(struct SensorConfig* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
-double* Read_nxp_accel(struct SensorConfig* nxp) {
+double* read_nxp_acc(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
   int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* acceleration_mg = (double*) malloc(sizeof(double)*3);
 
   /* Check if accel data ready */
   // [2:0] = 0b111 X,Y,Z data ready
@@ -162,18 +168,19 @@ double* Read_nxp_accel(struct SensorConfig* nxp) {
   // NOTE: LSB[7:2] have real data, [1:0] garbage values
   platform_read(&fd, FXOS8700_X_OUT_MSB, data_raw_accel.u8bit, 6);
 
-  /* Convert accel data */
-  // 14 bit resolution
-  // Range: 2g, Units: 0.244 mg/LSB
-  // Range: 4g, Units: 0.488 mg/LSB 
-  // Range: 8g, Units: 0.976 mg/LSB  
+  /* Convert accel data
+   * 14 bit resolution
+   * Range: 2g, Units: 0.244 mg/LSB
+   * Range: 4g, Units: 0.488 mg/LSB 
+   * Range: 8g, Units: 0.976 mg/LSB
+   */
   //acceleration_mg[0] = (double) undoComplement((data_raw_accel.i16bit[0] >> 2) * 0.244);
   //acceleration_mg[1] = (double) undoComplement((data_raw_accel.i16bit[1] >> 2) * 0.244);
   //acceleration_mg[2] = (double) undoComplement((data_raw_accel.i16bit[2] >> 2) * 0.244);
 
-  acceleration_mg[0] = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
-  acceleration_mg[1] = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
-  acceleration_mg[2] = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
+  *acceleration_mg = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
+  *(acceleration_mg+1) = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
+  *(acceleration_mg+2) = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
       
   return acceleration_mg;
 }
@@ -185,11 +192,14 @@ double* Read_nxp_accel(struct SensorConfig* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_gyro(struct SensorConfig* nxp) {
+ double* read_nxp_gyr(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
   int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* angular_rate_mdps = (double*) malloc(sizeof(double)*3);
 
   /* Check if data ready */
   do {
@@ -199,18 +209,19 @@ double* Read_nxp_accel(struct SensorConfig* nxp) {
   /* Read data from axes */
   platform_read(&fd, FXAS21002_OUT_X_MSB, data_raw_gyro.u8bit, 6);
 
-  /* Convert from raw to mdps */
-  // Range: 2000, Units: 62.5 mdps/LSB
-  // Range: 1000, Units: 31.25 mdps/LSB
-  // Range: 500, Units: 15.625 mdps/LSB
-  // Range: 250, Units: 7.8125 mdps/LSB
+  /* Convert from raw to mdps
+   * Range: 2000, Units: 62.5 mdps/LSB
+   * Range: 1000, Units: 31.25 mdps/LSB
+   * Range: 500, Units: 15.625 mdps/LSB
+   * Range: 250, Units: 7.8125 mdps/LSB
+   */
   //angular_rate_mdps[0] = (double) undoComplement(data_raw_gyro.i16bit[0] * 15.625);
   //angular_rate_mdps[1] = (double) undoComplement(data_raw_gyro.i16bit[1] * 15.625);
   //angular_rate_mdps[2] = (double) undoComplement(data_raw_gyro.i16bit[2] * 15.625);
 
-  angular_rate_mdps[0] = (double) data_raw_gyro.i16bit[0] * 15.625;
-  angular_rate_mdps[1] = (double) data_raw_gyro.i16bit[1] * 15.625;
-  angular_rate_mdps[2] = (double) data_raw_gyro.i16bit[2] * 15.625;
+  *angular_rate_mdps = (double) data_raw_gyro.i16bit[0] * 15.625;
+  *(angular_rate_mdps+1) = (double) data_raw_gyro.i16bit[1] * 15.625;
+  *(angular_rate_mdps+2) = (double) data_raw_gyro.i16bit[2] * 15.625;
     
   return angular_rate_mdps;
  }
@@ -222,11 +233,14 @@ double* Read_nxp_accel(struct SensorConfig* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_mag(struct SensorConfig* nxp) {
+ double* read_nxp_mag(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
   int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* magnetic_field_mgauss = (double*) malloc(sizeof(double)*3);
 
   /* Wait for mag data ready */
   // [2:0] = 0b111 X,Y,Z data ready
@@ -237,16 +251,17 @@ double* Read_nxp_accel(struct SensorConfig* nxp) {
   /* Read data from mag */
   platform_read(&fd, FXOS8700_M_OUT_X_MSB, data_raw_mag.u8bit, 6);
 
-  /* Convert mag data */
-  // Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
-  // Conveniently, raw data is already in desired format
+  /* Convert mag data
+   * Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
+   * No unit conversion necessary
+   */
   //magnetic_field_mgauss[0] = (double) undoComplement(data_raw_mag.i16bit[0]);
   //magnetic_field_mgauss[1] = (double) undoComplement(data_raw_mag.i16bit[1]);
   //magnetic_field_mgauss[2] = (double) undoComplement(data_raw_mag.i16bit[2]);
 
-  magnetic_field_mgauss[0] = (double) data_raw_mag.i16bit[0];
-  magnetic_field_mgauss[1] = (double) data_raw_mag.i16bit[1];
-  magnetic_field_mgauss[2] = (double) data_raw_mag.i16bit[2];
+  *magnetic_field_mgauss = (double) data_raw_mag.i16bit[0];
+  *(magnetic_field_mgauss+1) = (double) data_raw_mag.i16bit[1];
+  *(magnetic_field_mgauss+2) = (double) data_raw_mag.i16bit[2];
 
   return magnetic_field_mgauss;
  }

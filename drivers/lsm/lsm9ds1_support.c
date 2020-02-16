@@ -8,26 +8,7 @@
  ******************************************************************************
  */
 
-/* Includes ------------------------------------------------------------------*/
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <wiringPiI2C.h>
-#include "lsm9ds1_reg.h"
 #include "lsm9ds1_support.h"
-
-/*
-typedef struct SensorConfig {
-  unsigned int valid;
-  unsigned int id;
-  unsigned int addr;
-  int fd;
-  SensorType sensor_type;
-  DriverLibrary driver_library;
-  int x_offset;
-  int y_offset;
-  int z_offset;
-*/
 
 /*
  * @brief  Set up configuration registers and establish I2C communication
@@ -37,7 +18,7 @@ typedef struct SensorConfig {
  *                I2C addresses and file descriptors for communication
  *
  */
-int Configure_lsm(struct SensorConfig* lsm)
+int configure_lsm(struct SensorConfig* lsm)
 { 
 
   /* Set up I2C communication */
@@ -153,7 +134,7 @@ int Configure_lsm(struct SensorConfig* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
-double* Read_lsm_accel(struct SensorConfig* lsm)
+double* read_lsm_acc(struct SensorConfig* lsm)
 { 
   int fd_xl = lsm->fd;
   stmdev_ctx_t dev_ctx_imu;
@@ -161,12 +142,15 @@ double* Read_lsm_accel(struct SensorConfig* lsm)
   dev_ctx_imu.read_reg = platform_read;
   dev_ctx_imu.handle = (void*)&fd_xl;
 
+  /* Allocate memory for sensor readings */
+  double* acceleration_mg = (double*) malloc(sizeof(double)*3);
+  memset(acceleration_mg, 0x00, 3*sizeof(double));
+
   //Check status of data ready on accelerometer 
   do{
     platform_read(&fd_xl, LSM9DS1_STATUS_REG, (uint8_t*)&(reg.status_imu), 1);
   } while (reg.status_imu.xlda != 1);
 
-  double* accel_readings;
   memset(data_raw_acceleration.u8bit, 0x00, 3 * sizeof(int16_t));
   lsm9ds1_acceleration_raw_get(&dev_ctx_imu, data_raw_acceleration.u8bit);
   
@@ -176,9 +160,9 @@ double* Read_lsm_accel(struct SensorConfig* lsm)
   // FS = 8G -> 0.244 mg/LSB
   // FS = 16G -> 0.732 mg/LSB
 
-  acceleration_mg[0] = (double) data_raw_acceleration.i16bit[0] * 0.061;
-  acceleration_mg[1] = (double) data_raw_acceleration.i16bit[1] * 0.061;
-  acceleration_mg[2] = (double) data_raw_acceleration.i16bit[2] * 0.061;
+  *acceleration_mg = (double) data_raw_acceleration.i16bit[0] * 0.061;
+  *(acceleration_mg+1) = (double) data_raw_acceleration.i16bit[1] * 0.061;
+  *(acceleration_mg+2) = (double) data_raw_acceleration.i16bit[2] * 0.061;
 
   return acceleration_mg;
  }
@@ -190,32 +174,36 @@ double* Read_lsm_accel(struct SensorConfig* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_lsm_gyro(struct SensorConfig* lsm)
- {  
-   int fd_xl = lsm->fd;
-   stmdev_ctx_t dev_ctx_imu;
-   dev_ctx_imu.write_reg = platform_write;
-   dev_ctx_imu.read_reg = platform_read;
-   dev_ctx_imu.handle = (void*)&fd_xl;
+double* read_lsm_gyr(struct SensorConfig* lsm)
+{  
+  int fd_xl = lsm->fd;
+  stmdev_ctx_t dev_ctx_imu;
+  dev_ctx_imu.write_reg = platform_write;
+  dev_ctx_imu.read_reg = platform_read;
+  dev_ctx_imu.handle = (void*)&fd_xl;
+  
+  /* Allocate memory for sensor readings */
+  double* angular_rate_mdps = (double*) malloc(sizeof(double)*3);
+  memset(angular_rate_mdps, 0x00, 3*sizeof(double));
 
-   do { //Check status of data ready on gyroscope
-      platform_read(&fd_xl, LSM9DS1_STATUS_REG, (uint8_t*)&(reg.status_imu), 1);
-    } while (reg.status_imu.gda != 1);
+  do { //Check status of data ready on gyroscope
+    platform_read(&fd_xl, LSM9DS1_STATUS_REG, (uint8_t*)&(reg.status_imu), 1);
+  } while (reg.status_imu.gda != 1);
 
-    memset(data_raw_angular_rate.u8bit, 0x00, 3 * sizeof(int16_t));
-    lsm9ds1_angular_rate_raw_get(&dev_ctx_imu, data_raw_angular_rate.u8bit);
+  memset(data_raw_angular_rate.u8bit, 0x00, 3 * sizeof(int16_t));
+  lsm9ds1_angular_rate_raw_get(&dev_ctx_imu, data_raw_angular_rate.u8bit);
 
-    /* Convert raw data to units */
-    // FS = 245 dps -> 8.75 mdps/LSB
-    // FS = 500 dps -> 17.5 mdps/LSB
-    // FS = 2000 dps -> 70 mdps/LSB
+  /* Convert raw data to units */
+  // FS = 245 dps -> 8.75 mdps/LSB
+  // FS = 500 dps -> 17.5 mdps/LSB
+  // FS = 2000 dps -> 70 mdps/LSB
 
-    angular_rate_mdps[0] = (double) data_raw_angular_rate.i16bit[0] * 70.0;
-    angular_rate_mdps[1] = (double) data_raw_angular_rate.i16bit[1] * 70.0;
-    angular_rate_mdps[2] = (double) data_raw_angular_rate.i16bit[2] * 70.0;
+  *angular_rate_mdps = (double) data_raw_angular_rate.i16bit[0] * 70.0;
+  *(angular_rate_mdps+1) = (double) data_raw_angular_rate.i16bit[1] * 70.0;
+  *(angular_rate_mdps+2) = (double) data_raw_angular_rate.i16bit[2] * 70.0;
 
-    return angular_rate_mdps;
- }
+  return angular_rate_mdps;
+}
 
 /*
  * @brief  Read from Magnetometer
@@ -224,33 +212,37 @@ double* Read_lsm_accel(struct SensorConfig* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_lsm_mag(struct SensorConfig* lsm)
- {
-   int fd_m = lsm->fd; 
-   stmdev_ctx_t dev_ctx_mag;
-   dev_ctx_mag.write_reg = platform_write;
-   dev_ctx_mag.read_reg = platform_read;
-   dev_ctx_mag.handle = (void*)&fd_m;
+double* read_lsm_mag(struct SensorConfig* lsm)
+{
+  int fd_m = lsm->fd; 
+  stmdev_ctx_t dev_ctx_mag;
+  dev_ctx_mag.write_reg = platform_write;
+  dev_ctx_mag.read_reg = platform_read;
+  dev_ctx_mag.handle = (void*)&fd_m;
 
-   do { //Check status of data ready on magnetometer
-      platform_read(&fd_m, LSM9DS1_STATUS_REG_M, (uint8_t*)&(reg.status_mag), 1);
-    } while (reg.status_mag.zyxda != 1);
+  /* Allocate memory for sensor readings */
+  double* magnetic_field_mgauss = (double*) malloc(sizeof(double)*3);
+  memset(magnetic_field_mgauss, 0x00, 3*sizeof(double));
 
-    memset(data_raw_magnetic_field.u8bit, 0x00, 3 * sizeof(int16_t));
-    lsm9ds1_magnetic_raw_get(&dev_ctx_mag, data_raw_magnetic_field.u8bit);
+  do { //Check status of data ready on magnetometer
+    platform_read(&fd_m, LSM9DS1_STATUS_REG_M, (uint8_t*)&(reg.status_mag), 1);
+  } while (reg.status_mag.zyxda != 1);
 
-    /* Convert raw data to units */
-    // FS = 4 gauss -> 0.14 mg/LSB
-    // FS = 8 gauss -> 0.29 mg/LSB
-    // FS = 12 gauss -> 0.43 mg/LSB
-    // FS = 16 gauss -> 0.58 mg/LSB
+  memset(data_raw_magnetic_field.u8bit, 0x00, 3 * sizeof(int16_t));
+  lsm9ds1_magnetic_raw_get(&dev_ctx_mag, data_raw_magnetic_field.u8bit);
 
-    magnetic_field_mgauss[0] = (double) data_raw_magnetic_field.i16bit[0] * 0.58;
-    magnetic_field_mgauss[1] = (double) data_raw_magnetic_field.i16bit[1] * 0.58;
-    magnetic_field_mgauss[2] = (double) data_raw_magnetic_field.i16bit[2] * 0.58;
+  /* Convert raw data to units */
+  // FS = 4 gauss -> 0.14 mg/LSB
+  // FS = 8 gauss -> 0.29 mg/LSB
+  // FS = 12 gauss -> 0.43 mg/LSB
+  // FS = 16 gauss -> 0.58 mg/LSB
 
-    return magnetic_field_mgauss;
- }
+  *magnetic_field_mgauss = (double) data_raw_magnetic_field.i16bit[0] * 0.58;
+  *(magnetic_field_mgauss+1) = (double) data_raw_magnetic_field.i16bit[1] * 0.58;
+  *(magnetic_field_mgauss+2) = (double) data_raw_magnetic_field.i16bit[2] * 0.58;
+
+  return magnetic_field_mgauss;
+}
 
 /*
  * @brief  Write generic device register (platform dependent)
