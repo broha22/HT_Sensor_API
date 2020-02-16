@@ -8,20 +8,26 @@
  ******************************************************************************
  */
 
+/* Includes */
+#include "../../headers/HTSensors.h"
+
 /* Struct Declarations */
 typedef union{
   int16_t i16bit[3];
   uint8_t u8bit[6];
 } axis3bit16_t;
 
-typedef struct sensor{
-    uint8_t addr_accel;
-    uint8_t addr_gyro;
-    uint8_t addr_mag;
-    int file_desc_accel;
-    int file_desc_gyro;
-    int file_desc_mag;
-}sensor;
+/*
+typedef struct SensorConfig {
+  unsigned int valid;
+  unsigned int id;
+  unsigned int addr;
+  SensorType sensor_type; 
+  DriverLibrary driver_library;
+  int x_offset;
+  int y_offset;
+  int z_offset;
+} SensorConfig; */
 
 /* Private variables ---------------------------------------------------------*/
 static axis3bit16_t data_raw_acceleration;
@@ -43,7 +49,7 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
                              uint16_t len);
 
 /* Extern functions ----------------------------------------------------------*/
-int Configure_lsm(struct sensor* lsm);
-double* Read_lsm_accel(struct sensor* lsm);
-double* Read_lsm_gyro(struct sensor* lsm);
-double* Read_lsm_mag(struct sensor* lsm);
+int Configure_lsm(struct SensorConfig*);
+double* Read_lsm_accel(struct SensorConfig*);
+double* Read_lsm_gyro(struct SensorConfig*);
+double* Read_lsm_mag(struct SensorConfig*);

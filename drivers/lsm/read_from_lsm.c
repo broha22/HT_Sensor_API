@@ -1,27 +1,29 @@
 #include "lsm9ds1_reg.h"
+#include "lsm9ds1_support.h"
 #include <stdio.h>
 #include <string.h>
 
-/* Generic Sensor Information struct */
-typedef struct sensor{
-    uint8_t addr_accel;
-    uint8_t addr_gyro;
-    uint8_t addr_mag;
-    int file_desc_accel;
-    int file_desc_gyro;
-    int file_desc_mag;
-}sensor;
-
-/* Function declarations */
-int Configure_lsm(struct sensor* lsm);
-double* Read_lsm_accel(struct sensor* lsm);
-double* Read_lsm_gyro(struct sensor* lsm);
-double* Read_lsm_mag(struct sensor* lsm);
+/* Function declarations
+int Configure_lsm(struct SensorConfig*);
+double* Read_lsm_accel(struct SensorConfig*);
+double* Read_lsm_gyro(struct SensorConfig*);
+double* Read_lsm_mag(struct SensorConfig*); */
 
 int main() {
-  struct sensor lsm9ds1;
+  struct SensorConfig lsm_accel;
+  lsm_accel.sensor_type = 1;
+  lsm_accel.addr = 0x6a;
+  struct SensorConfig lsm_gyro;
+  lsm_gyro.sensor_type = 0;
+  lsm_gyro.addr = 0x6a;
+  struct SensorConfig lsm_mag;
+  lsm_mag.sensor_type = 2;
+  lsm_mag.addr = 0x1c;
+  
     
-  int result = Configure_lsm(&lsm9ds1);
+  int result1 = Configure_lsm(&lsm_accel);
+  int result2 = Configure_lsm(&lsm_gyro);
+  int result3 = Configure_lsm(&lsm_mag);
 
   double lsm_accel_readings[3];
   double lsm_gyro_readings[3];
@@ -31,12 +33,12 @@ int main() {
   double* gyro_return;
   double* mag_return;
 
-  if (result == 0) {
+  if (result1 == 0 && result2 == 0 && result3 == 0) {
     while(1) {
    
-      accel_return = Read_lsm_accel(&lsm9ds1);
-      gyro_return = Read_lsm_gyro(&lsm9ds1);
-      mag_return = Read_lsm_mag(&lsm9ds1);
+      accel_return = Read_lsm_accel(&lsm_accel);
+      gyro_return = Read_lsm_gyro(&lsm_gyro);
+      mag_return = Read_lsm_mag(&lsm_mag);
 
       lsm_accel_readings[0] = *(accel_return);
       lsm_accel_readings[1] = *(accel_return+1);

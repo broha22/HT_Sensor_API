@@ -17,6 +17,19 @@
 #include "lsm9ds1_support.h"
 
 /*
+typedef struct SensorConfig {
+  unsigned int valid;
+  unsigned int id;
+  unsigned int addr;
+  int fd;
+  SensorType sensor_type;
+  DriverLibrary driver_library;
+  int x_offset;
+  int y_offset;
+  int z_offset;
+*/
+
+/*
  * @brief  Set up configuration registers and establish I2C communication
  *         channels for all sensors on the LSM9DS1
  *
@@ -24,73 +37,112 @@
  *                I2C addresses and file descriptors for communication
  *
  */
-int Configure_lsm(struct sensor* lsm)
+int Configure_lsm(struct SensorConfig* lsm)
 { 
+
   /* Set up I2C communication */
-  uint8_t i2c_add_mag = 0x1c;
-  uint8_t i2c_add_imu = 0x6a;
-  int fd_xl = wiringPiI2CSetup(i2c_add_imu);
-  int fd_m = wiringPiI2CSetup(i2c_add_mag);
-
-  /* Fill in sensor struct */
-  lsm->addr_accel = i2c_add_imu;
-  lsm->addr_gyro = i2c_add_imu;
-  lsm->addr_mag = i2c_add_mag;
-  lsm->file_desc_accel = fd_xl;
-  lsm->file_desc_gyro = fd_xl;
-  lsm->file_desc_mag = fd_m;
-
-  /* Initialize inertial sensors (IMU) driver interface */
-  stmdev_ctx_t dev_ctx_mag;
-  dev_ctx_mag.write_reg = platform_write;
-  dev_ctx_mag.read_reg = platform_read;
-  dev_ctx_mag.handle = (void*)&fd_m;
-
-  /* Initialize magnetic sensors driver interface */
-  stmdev_ctx_t dev_ctx_imu;
-  dev_ctx_imu.write_reg = platform_write;
-  dev_ctx_imu.read_reg = platform_read;
-  dev_ctx_imu.handle = (void*)&fd_xl;
-
-  /* Check device ID */
-  int ret = platform_read(&fd_xl, LSM9DS1_WHO_AM_I, (uint8_t*)&(whoamI.imu), 1);
-  if (ret == 0) {
-    ret += platform_read(&fd_m, LSM9DS1_WHO_AM_I_M, (uint8_t*)&(whoamI.mag), 1);
-  }
-  
-  if (whoamI.imu != LSM9DS1_IMU_ID || whoamI.mag != LSM9DS1_MAG_ID){
-    printf("Device not found\n");
+  int fd = wiringPiI2CSetup(lsm->addr);
+  if (fd < 0) {
+    printf("I2C Setup failed\n");
     return -1;
   }
 
-  /* Restore default configuration */
-  lsm9ds1_dev_reset_set(&dev_ctx_mag, &dev_ctx_imu, PROPERTY_ENABLE);
-  do {
-    printf("Device in reset\n");
-    lsm9ds1_dev_reset_get(&dev_ctx_mag, &dev_ctx_imu, &rst);
-  } while (rst);
+  lsm->fd = fd;
 
-  /* Enable Block Data Update */
-  ret += lsm9ds1_block_data_update_set(&dev_ctx_mag, &dev_ctx_imu, PROPERTY_ENABLE);
+  int ret = 0;  // Accumulation of return values
+  uint8_t write_buf, read_buf;
+  uint8_t mask;
 
-  /* Set full scale */
-  ret += lsm9ds1_xl_full_scale_set(&dev_ctx_imu, LSM9DS1_2g);
-  ret += lsm9ds1_gy_full_scale_set(&dev_ctx_imu, LSM9DS1_2000dps);
-  ret += lsm9ds1_mag_full_scale_set(&dev_ctx_mag, LSM9DS1_16Ga);
+  /* If sensor is accel or gyro, set up IMU */
+  if (lsm->sensor_type == 1 || lsm->sensor_type == 0) {
+    
+    /* Initialize inertial sensors (IMU) driver interface */
+    stmdev_ctx_t dev_ctx_imu;
+    dev_ctx_imu.write_reg = platform_write;
+    dev_ctx_imu.read_reg = platform_read;
+    dev_ctx_imu.handle = (void*)&fd;
+    
+    /* Check device ID */
+    ret += platform_read(&fd, LSM9DS1_WHO_AM_I, (uint8_t*)&(whoamI.imu), 1); 
+    if (whoamI.imu != LSM9DS1_IMU_ID) {
+      printf("Device not found\n");
+      return -1;
+    }
+    
+    /* Restore default configuration */
+    // [0] SW_RESET
+    write_buf = 0x01;
+    mask = 0x01;
+    ret += platform_write(&fd, LSM9DS1_CTRL_REG8, &write_buf, 1);
+    do {
+      platform_read(&fd, LSM9DS1_CTRL_REG8, &read_buf, 1);
+    } while( (read_buf & mask) > 0);
 
-  /* Configure filtering chain - See datasheet for filtering chain details */
-  /* Accelerometer filtering chain */
-  ret += lsm9ds1_xl_filter_aalias_bandwidth_set(&dev_ctx_imu, LSM9DS1_AUTO);
-  ret += lsm9ds1_xl_filter_lp_bandwidth_set(&dev_ctx_imu, LSM9DS1_LP_ODR_DIV_50);
-  ret += lsm9ds1_xl_filter_out_path_set(&dev_ctx_imu, LSM9DS1_LP_OUT);
-  /* Gyroscope filtering chain */
-  ret += lsm9ds1_gy_filter_lp_bandwidth_set(&dev_ctx_imu, LSM9DS1_LP_ULTRA_LIGHT);
-  ret += lsm9ds1_gy_filter_hp_bandwidth_set(&dev_ctx_imu, LSM9DS1_HP_MEDIUM);
-  ret += lsm9ds1_gy_filter_out_path_set(&dev_ctx_imu, LSM9DS1_LPF1_HPF_LPF2_OUT);
+    /* Enable block data update */
+    // [6] BDU enable
+    // [2] Auto-increment enable
+    write_buf = 0x44;
+    ret += platform_write(&fd, LSM9DS1_CTRL_REG8, &write_buf, 1);
+    
+    /* Set full scale */
+    ret += lsm9ds1_xl_full_scale_set(&dev_ctx_imu, LSM9DS1_2g);
+    ret += lsm9ds1_gy_full_scale_set(&dev_ctx_imu, LSM9DS1_2000dps);
 
-  /* Set Output Data Rate / Power mode */
-  ret += lsm9ds1_imu_data_rate_set(&dev_ctx_imu, LSM9DS1_IMU_59Hz5);
-  ret += lsm9ds1_mag_data_rate_set(&dev_ctx_mag, LSM9DS1_MAG_UHP_10Hz);
+    /* Configure filtering chain - See datasheet for filtering chain details */
+    /* Accelerometer filtering chain */
+    ret += lsm9ds1_xl_filter_aalias_bandwidth_set(&dev_ctx_imu, LSM9DS1_AUTO);
+    ret += lsm9ds1_xl_filter_lp_bandwidth_set(&dev_ctx_imu, LSM9DS1_LP_ODR_DIV_50);
+    ret += lsm9ds1_xl_filter_out_path_set(&dev_ctx_imu, LSM9DS1_LP_OUT);
+    /* Gyroscope filtering chain */
+    ret += lsm9ds1_gy_filter_lp_bandwidth_set(&dev_ctx_imu, LSM9DS1_LP_ULTRA_LIGHT);
+    ret += lsm9ds1_gy_filter_hp_bandwidth_set(&dev_ctx_imu, LSM9DS1_HP_MEDIUM);
+    ret += lsm9ds1_gy_filter_out_path_set(&dev_ctx_imu, LSM9DS1_LPF1_HPF_LPF2_OUT);
+    
+    /* Set output data rate */
+    ret += lsm9ds1_imu_data_rate_set(&dev_ctx_imu, LSM9DS1_IMU_59Hz5);
+
+  }
+  else if (lsm->sensor_type == 2) {
+    
+    /* Initialize magnetic sensors driver interface */
+    stmdev_ctx_t dev_ctx_mag;
+    dev_ctx_mag.write_reg = platform_write;
+    dev_ctx_mag.read_reg = platform_read;
+    dev_ctx_mag.handle = (void*)&fd;
+
+    /* Check device ID */    
+    ret += platform_read(&fd, LSM9DS1_WHO_AM_I_M, (uint8_t*)&(whoamI.mag), 1);
+  
+    if (whoamI.mag != LSM9DS1_MAG_ID){
+      printf("Device not found\n");
+      return -1;
+    }
+
+    /* Restore default configuration */
+    // [2] SOFT_RST enable
+    write_buf = 0x04;
+    mask = 0x04;
+    ret += platform_write(&fd, LSM9DS1_CTRL_REG2_M, &write_buf, 1);
+    do {
+      platform_read(&fd, LSM9DS1_CTRL_REG2_M, &read_buf, 1);
+    } while( (read_buf & mask) > 0);
+    
+    /* Enable block data update */
+    // [6] BDU enable
+    write_buf = 0x40;
+    ret += platform_write(&fd, LSM9DS1_CTRL_REG5_M, &write_buf, 1);
+
+    /* Set full scale */    
+    ret += lsm9ds1_mag_full_scale_set(&dev_ctx_mag, LSM9DS1_16Ga);
+
+    /* Set output data rate */ 
+    ret += lsm9ds1_mag_data_rate_set(&dev_ctx_mag, LSM9DS1_MAG_UHP_10Hz);
+
+  }
+  else { 
+    printf("Invalid Sensor type\n");
+    return -1;
+  }
   
   return ret; //Return value indicates number of incorrectly performed functions
 }
@@ -102,14 +154,9 @@ int Configure_lsm(struct sensor* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
-double* Read_lsm_accel(struct sensor* lsm)
+double* Read_lsm_accel(struct SensorConfig* lsm)
 { 
-  int fd_xl = lsm->file_desc_accel;
-  int fd_m = lsm->file_desc_mag;
-  stmdev_ctx_t dev_ctx_mag;
-  dev_ctx_mag.write_reg = platform_write;
-  dev_ctx_mag.read_reg = platform_read;
-  dev_ctx_mag.handle = (void*)&fd_m;
+  int fd_xl = lsm->fd;
   stmdev_ctx_t dev_ctx_imu;
   dev_ctx_imu.write_reg = platform_write;
   dev_ctx_imu.read_reg = platform_read;
@@ -144,14 +191,9 @@ double* Read_lsm_accel(struct sensor* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_lsm_gyro(struct sensor* lsm)
+ double* Read_lsm_gyro(struct SensorConfig* lsm)
  {  
-   int fd_xl = lsm->file_desc_gyro;
-   int fd_m = lsm->file_desc_mag;
-   stmdev_ctx_t dev_ctx_mag;
-   dev_ctx_mag.write_reg = platform_write;
-   dev_ctx_mag.read_reg = platform_read;
-   dev_ctx_mag.handle = (void*)&fd_m;
+   int fd_xl = lsm->fd;
    stmdev_ctx_t dev_ctx_imu;
    dev_ctx_imu.write_reg = platform_write;
    dev_ctx_imu.read_reg = platform_read;
@@ -183,18 +225,13 @@ double* Read_lsm_accel(struct sensor* lsm)
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_lsm_mag(struct sensor* lsm)
+ double* Read_lsm_mag(struct SensorConfig* lsm)
  {
-   int fd_xl = lsm->file_desc_accel;
-   int fd_m = lsm->file_desc_mag; 
+   int fd_m = lsm->fd; 
    stmdev_ctx_t dev_ctx_mag;
    dev_ctx_mag.write_reg = platform_write;
    dev_ctx_mag.read_reg = platform_read;
    dev_ctx_mag.handle = (void*)&fd_m;
-   stmdev_ctx_t dev_ctx_imu;
-   dev_ctx_imu.write_reg = platform_write;
-   dev_ctx_imu.read_reg = platform_read;
-   dev_ctx_imu.handle = (void*)&fd_xl;
 
    do { //Check status of data ready on magnetometer
       platform_read(&fd_m, LSM9DS1_STATUS_REG_M, (uint8_t*)&(reg.status_mag), 1);

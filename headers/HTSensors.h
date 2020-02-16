@@ -47,6 +47,7 @@ typedef struct SensorConfig {
 	unsigned int valid;
 	unsigned int id;
 	unsigned int addr;
+  int fd;
 	SensorType sensor_type;
 	DriverLibrary driver_library;
 	int x_offset;
