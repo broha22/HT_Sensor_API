@@ -24,12 +24,8 @@ typedef union{
 static axis3bit16_t data_raw_acceleration;
 static axis3bit16_t data_raw_angular_rate;
 static axis3bit16_t data_raw_magnetic_field;
-static double acceleration_mg[3];
-static double angular_rate_mdps[3];
-static double magnetic_field_mgauss[3];
 static lsm9ds1_id_t whoamI;
 static lsm9ds1_status_t reg;
-static uint8_t rst;
 
 /* Extern variables ----------------------------------------------------------*/
 

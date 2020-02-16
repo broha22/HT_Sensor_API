@@ -1,9 +1,9 @@
 /*
  ******************************************************************************
- * @file    lsm9ds1_support.h
+ * @file    nxp_support.h
  * @author  Isaac Grossberg
  * @brief   This file declares variables and functions used in the
- *          lsm9ds1_support.c file
+ *          nxp_support.c file
  *
  ******************************************************************************
  */
@@ -11,6 +11,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/time.h>
 #include <string.h>
 #include <unistd.h>
@@ -30,6 +31,7 @@
 #define FXOS8700_X_OUT_MSB      0x01
 #define FXOS8700_M_OUT_X_MSB    0x33
 #define FXOS8700_M_STATUS       0x32
+#define FXOS8700_SYSMOD         0x0B
 
 #define FXAS21002_WHOAMI        0x0C
 #define FXAS21002_WHOAMI_VAL    0xD7
@@ -66,9 +68,9 @@ typedef union{
 static axis3bit16_t data_raw_accel;
 static axis3bit16_t data_raw_gyro;
 static axis3bit16_t data_raw_mag;
-static double acceleration_mg[3];
-static double angular_rate_mdps[3];
-static double magnetic_field_mgauss[3];
+//static double acceleration_mg[3];
+//static double angular_rate_mdps[3];
+//static double magnetic_field_mgauss[3];
 
 /* Platform specific read/write functions */
 static int32_t platform_write(void* handle, uint8_t reg, uint8_t* bufp, uint16_t len);

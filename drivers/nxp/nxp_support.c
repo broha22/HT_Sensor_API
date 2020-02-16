@@ -8,20 +8,13 @@
  ******************************************************************************
  */
 
-/* TODO:
- * Fix unit conversion for accel
- * Fix unit conversion for mag
- * Fix unit conversion for gyro
- * Add in function to close file descriptors
-
-
-/* Includes ------------------------------------------------------------------*/
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <wiringPiI2C.h>
 #include "nxp_support.h"
 
+/*
+ * @brief  Undo the two's complement of a 16-bit value
+ * 
+ * @param  val  16-bit value in two's complement form
+ */
 uint16_t undoComplement(uint16_t val) {
   
   uint16_t mask = 0x8000;
@@ -45,74 +38,103 @@ uint16_t undoComplement(uint16_t val) {
  *
  * @param  lsm    sensor struct containing information about
  *                I2C addresses and file descriptors for communication
- *
  */
-int Configure_nxp(struct sensor* nxp) {
-  
-  uint8_t fxos_i2c_add = 0x1F;
-  uint8_t fxas_i2c_add = 0x21;
+int configure_nxp(struct SensorConfig* nxp) {
+
+  /* Set up I2C Comunication */
+  int fd = wiringPiI2CSetup(nxp->addr);
+  if (fd < 0) {
+    printf("I2C Setup failed\n");
+    return -1;
+  }
+    
+  /* Fill struct with new fd */
+  nxp->fd = fd;
+
+  int ret = 0;
   uint8_t write_buf;
   uint8_t read_buf;
 
-  /* Set up I2C Communication */
-  int fd_fxos = wiringPiI2CSetup(fxos_i2c_add);
-  int fd_fxas = wiringPiI2CSetup(fxas_i2c_add);
+  if (nxp->sensor_type == Acc || nxp->sensor_type == Mag) {
+    
+    /* Check Device ID and compare against WhoAmI */
+    ret += platform_read(&fd, FXOS8700_WHOAMI, &read_buf, 1);
+    if (read_buf != FXOS8700_WHOAMI_VAL) {
+      printf("Device not found\n");
+      return -1;
+    }
 
-  /* Fill in sensor struct */
-  nxp->addr_accel = fxos_i2c_add;
-  nxp->addr_gyro = fxas_i2c_add;
-  nxp->addr_mag = fxos_i2c_add;
-  nxp->file_desc_accel = fd_fxos;
-  nxp->file_desc_gyro = fd_fxas;
-  nxp->file_desc_mag = fd_fxos;
+    /* Reset device */      
+    write_buf = 0x00; //[0] = 0b0 sets standby mode
+    ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
+    do { /* Wait for system mode to update to standy */
+      platform_read(&fd, FXOS8700_SYSMOD, &read_buf, 1);
+    }while ( (read_buf & 0x03) != 0x00);
+    
+    /* Reset mag */
+    //[6] Magnetic one-shot reset
+    write_buf = 0x40;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
 
-  /* Check Device ID and compare against WhoAmI */
-  int ret = platform_read(&fd_fxos, FXOS8700_WHOAMI, &read_buf, 1);
-  if (read_buf != FXOS8700_WHOAMI_VAL) {
-    printf("Device not found\n");
+    /* Set mode to accel + mag
+     * [1:0] = 0b11 Hybrid mode (both sensors active)
+     * [4:2] = 0b111 Max Over sampling rate (16)
+     */
+    write_buf = 0x1F;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
+
+    /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
+    write_buf = 0x00;
+    ret += platform_write(&fd, FXOS8700_M_CTRL_REG2, &write_buf, 1);
+
+
+    /* Set ranges on sensors
+     * Magnetic range fixed to 1200 uT
+     * Accel range 2g ([1:0] = 0b00)
+     * Mag range 500 dps
+     * [4] HPF enable
+     */
+    write_buf = 0x10;
+    ret += platform_write(&fd, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
+
+
+    /* Set output data rates + set active */
+    // [3] Reduced noise mode enable
+    write_buf = 0x05;
+    ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
+
+  }
+  else if (nxp->sensor_type == Gyr) {
+    
+    /* Check Device ID and compare against WhoAmI */    
+    ret += platform_read(&fd, FXAS21002_WHOAMI, &read_buf, 1);
+    if (read_buf != FXAS21002_WHOAMI_VAL) {
+      printf("Device not found\n");
+      return -1;
+    }
+
+    /* Reset device
+     * [6] Software Reset
+     */
+    write_buf = 0x40;
+    ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
+    do {
+      platform_read(&fd, FXAS21002_CTRLREG1, &read_buf, 1);
+    }while (read_buf == 0x40);
+
+    /* Set range */
+    write_buf = 0x03;
+    ret += platform_write(&fd, FXAS21002_CTRLREG0, &write_buf, 1);
+    
+    /* Set ODR + set active */
+    write_buf = 0x02;
+    ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
+
+  }
+  else {
+    printf("Invalid Sensor type\n");
     return -1;
   }
-
-  ret += platform_read(&fd_fxas, FXAS21002_WHOAMI, &read_buf, 1);
-  if (read_buf != FXAS21002_WHOAMI_VAL) {
-    printf("Device not found\n");
-    return -1;
-  }
-  
-  /* Put device in reset */
-  write_buf = 0x00;
-  ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x20;
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x40;
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
-  do {
-    platform_read(&fd_fxas, FXAS21002_CTRLREG1, &read_buf, 1);
-  }while (read_buf == 0x40);
-
-  /* Set mode to accel + mag */
-  // [1:0] = 0b11 Hybrid mode (both sensors active)
-  write_buf = 0x03;
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG1, &write_buf, 1);
-
-  /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
-  write_buf = 0x00;
-  ret += platform_write(&fd_fxos, FXOS8700_M_CTRL_REG2, &write_buf, 1);
-
-  /* Set ranges on sensors */
-  // Magnetic range fixed to 1200 uT
-  // Accel range 2g ([1:0] = 0b00)
-  // Mag range 500 dps
-  write_buf = 0x00;
-  ret += platform_write(&fd_fxos, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
-  write_buf = 0x03;
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG0, &write_buf, 1);
-
-  /* Set output data rates + set active */
-  write_buf = 0x01;
-  ret += platform_write(&fd_fxos, FXOS8700_CTRL_REG1, &write_buf, 1);
-  write_buf = 0x02;
-  ret += platform_write(&fd_fxas, FXAS21002_CTRLREG1, &write_buf, 1);
 
   /* Wait necessary transition time from standby to active time (6ms) */
   usleep(6 * 1000);
@@ -127,11 +149,14 @@ int Configure_nxp(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
-double* Read_nxp_accel(struct sensor* nxp) {
+double* read_nxp_acc(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_accel;
+  int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* acceleration_mg = (double*) malloc(sizeof(double)*3);
 
   /* Check if accel data ready */
   // [2:0] = 0b111 X,Y,Z data ready
@@ -143,14 +168,19 @@ double* Read_nxp_accel(struct sensor* nxp) {
   // NOTE: LSB[7:2] have real data, [1:0] garbage values
   platform_read(&fd, FXOS8700_X_OUT_MSB, data_raw_accel.u8bit, 6);
 
-  /* Convert accel data */
-  // 14 bit resolution
-  // Range: 2g, Units: 0.244 mg/LSB
-  // Range: 4g, Units: 0.488 mg/LSB 
-  // Range: 8g, Units: 0.976 mg/LSB  
-  acceleration_mg[0] = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
-  acceleration_mg[1] = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
-  acceleration_mg[2] = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
+  /* Convert accel data
+   * 14 bit resolution
+   * Range: 2g, Units: 0.244 mg/LSB
+   * Range: 4g, Units: 0.488 mg/LSB 
+   * Range: 8g, Units: 0.976 mg/LSB
+   */
+  //acceleration_mg[0] = (double) undoComplement((data_raw_accel.i16bit[0] >> 2) * 0.244);
+  //acceleration_mg[1] = (double) undoComplement((data_raw_accel.i16bit[1] >> 2) * 0.244);
+  //acceleration_mg[2] = (double) undoComplement((data_raw_accel.i16bit[2] >> 2) * 0.244);
+
+  *acceleration_mg = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
+  *(acceleration_mg+1) = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
+  *(acceleration_mg+2) = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
       
   return acceleration_mg;
 }
@@ -162,11 +192,14 @@ double* Read_nxp_accel(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_gyro(struct sensor* nxp) {
+ double* read_nxp_gyr(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_gyro;
+  int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* angular_rate_mdps = (double*) malloc(sizeof(double)*3);
 
   /* Check if data ready */
   do {
@@ -176,15 +209,19 @@ double* Read_nxp_accel(struct sensor* nxp) {
   /* Read data from axes */
   platform_read(&fd, FXAS21002_OUT_X_MSB, data_raw_gyro.u8bit, 6);
 
-  /* Convert from raw to mdps */
-  // Range: 2000, Units: 62.5 mdps/LSB
-  // Range: 1000, Units: 31.25 mdps/LSB
-  // Range: 500, Units: 15.625 mdps/LSB
-  // Range: 250, Units: 7.8125 mdps/LSB
-  angular_rate_mdps[0] = (double) data_raw_gyro.i16bit[0] * 15.625;
-  angular_rate_mdps[1] = (double) data_raw_gyro.i16bit[1] * 15.625;
-  angular_rate_mdps[2] = (double) data_raw_gyro.i16bit[2] * 15.625;
+  /* Convert from raw to mdps
+   * Range: 2000, Units: 62.5 mdps/LSB
+   * Range: 1000, Units: 31.25 mdps/LSB
+   * Range: 500, Units: 15.625 mdps/LSB
+   * Range: 250, Units: 7.8125 mdps/LSB
+   */
+  //angular_rate_mdps[0] = (double) undoComplement(data_raw_gyro.i16bit[0] * 15.625);
+  //angular_rate_mdps[1] = (double) undoComplement(data_raw_gyro.i16bit[1] * 15.625);
+  //angular_rate_mdps[2] = (double) undoComplement(data_raw_gyro.i16bit[2] * 15.625);
 
+  *angular_rate_mdps = (double) data_raw_gyro.i16bit[0] * 15.625;
+  *(angular_rate_mdps+1) = (double) data_raw_gyro.i16bit[1] * 15.625;
+  *(angular_rate_mdps+2) = (double) data_raw_gyro.i16bit[2] * 15.625;
     
   return angular_rate_mdps;
  }
@@ -196,11 +233,14 @@ double* Read_nxp_accel(struct sensor* nxp) {
  *                I2C addresses and file descriptors for communication
  *
  */
- double* Read_nxp_mag(struct sensor* nxp) {
+ double* read_nxp_mag(struct SensorConfig* nxp) {
 
   uint8_t mask = 0x07;       //Mask for data ready bits
   uint8_t read_buf;
-  int fd = nxp->file_desc_mag;
+  int fd = nxp->fd;
+
+  /* Allocate memory for sensor readings */
+  double* magnetic_field_mgauss = (double*) malloc(sizeof(double)*3);
 
   /* Wait for mag data ready */
   // [2:0] = 0b111 X,Y,Z data ready
@@ -211,12 +251,17 @@ double* Read_nxp_accel(struct sensor* nxp) {
   /* Read data from mag */
   platform_read(&fd, FXOS8700_M_OUT_X_MSB, data_raw_mag.u8bit, 6);
 
-  /* Convert mag data */
-  // Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
-  // Conveniently, raw data is already in desired format
-  magnetic_field_mgauss[0] = (double) data_raw_mag.i16bit[0];
-  magnetic_field_mgauss[1] = (double) data_raw_mag.i16bit[1];
-  magnetic_field_mgauss[2] = (double) data_raw_mag.i16bit[2];
+  /* Convert mag data
+   * Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
+   * No unit conversion necessary
+   */
+  //magnetic_field_mgauss[0] = (double) undoComplement(data_raw_mag.i16bit[0]);
+  //magnetic_field_mgauss[1] = (double) undoComplement(data_raw_mag.i16bit[1]);
+  //magnetic_field_mgauss[2] = (double) undoComplement(data_raw_mag.i16bit[2]);
+
+  *magnetic_field_mgauss = (double) data_raw_mag.i16bit[0];
+  *(magnetic_field_mgauss+1) = (double) data_raw_mag.i16bit[1];
+  *(magnetic_field_mgauss+2) = (double) data_raw_mag.i16bit[2];
 
   return magnetic_field_mgauss;
  }
@@ -267,20 +312,32 @@ static int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp,
   if (len == 1) {
     result = wiringPiI2CReadReg8(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 2) {
     result = wiringPiI2CReadReg16(*fd, reg);
     *bufp = result;
+    //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   }
   else if (len == 6) {
-    int x_result = wiringPiI2CReadReg16(*fd, reg);
-    int y_result = wiringPiI2CReadReg16(*fd, reg+2);
-    int z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    uint16_t x_result = wiringPiI2CReadReg16(*fd, reg);
+    //printf("Raw read %X from register %X\n", x_result, reg);
+    uint16_t y_result = wiringPiI2CReadReg16(*fd, reg+2);
+    //printf("Raw read %X from register %X\n", y_result, reg+2);
+    uint16_t z_result = wiringPiI2CReadReg16(*fd, reg+4);
+    //printf("Raw read %X from register %X\n", z_result, reg+4);
     *bufp = x_result;
+    *(bufp+1) = x_result >> 8;
     *(bufp+2) = y_result;
+    *(bufp+3) = y_result >> 8;
     *(bufp+4) = z_result;
+    *(bufp+5) = z_result >> 8;
+
+    /*int i;
+    for (i=0; i<6; i++) {
+      printf("Read %X from register %X\n", (uint8_t) *(bufp+i),reg+i);
+    }*/
   }
   else { return 1; }
-  //printf("Read %X from register %X (len %d,fd %d)\n", *bufp, reg, len, *fd);
   return 0;
 }
