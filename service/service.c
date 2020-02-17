@@ -5,7 +5,7 @@
  * @Last Modified Time:  Tuesday February 11th 2020
  * @Copyright:  (c) Oregon State University 2020
  */
-// TODO: clean up header includes
+// #define HT_DRIVER_PROCESS "./driver_process"
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 
@@ -22,28 +22,31 @@ void handle_timer (union sigval arg) {
   /* Copy sensor config from shared mem */
   SensorConfig current_cfg;
   memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
-  
+  // printf("addr %d\n", current_cfg.addr);
   /* Loop until we get a valid sensor */
   while (current_cfg.addr == 0) {
     index = (index + 1) % MAX_SENSORS;
     /* If no sensors are valid dont loop infinitely */
     if (index == index_copy) break;
     memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
+    // printf("addr %d\n", current_cfg.addr);
   }
   if (current_cfg.addr == 0) {
     ((HTSigVal*)arg.sival_ptr)->busy = 0;
     return;
   }
+  
   pid_t pid;
   /* Set up sensor if it is not set up yet */
   if (current_cfg.valid == 0) {
     current_cfg.command = HTC_SETUP;
+    memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
     pid = fork();
     if (pid == 0) {
       // child
       char str[3]; // 99 sensors
       sprintf(str, "%d", current_cfg.index);
-      if (execl("./driver_process", str, (char*)0) == -1) {
+      if (execl(HT_DRIVER_PROCESS, HT_DRIVER_PROCESS, str, (char*)0) == -1) {
         printf("Failed to spwan child %d\n", errno);
       }
     } else {
@@ -59,12 +62,13 @@ void handle_timer (union sigval arg) {
   }
   
   /* Continue processing sensor read */
-  current_cfg.command = HTC_READ;
-  memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
-  while (current_cfg.command != HTC_WAIT) {
-    memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
+  if (current_cfg.command == HTC_WAIT) {
+    current_cfg.command = HTC_READ;
+    memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
+    while (current_cfg.command != HTC_WAIT && current_cfg.command != 0) {
+      memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
+    }
   }
-
   /* Increase read index */
   ((HTSigVal*)arg.sival_ptr)->index = (index + 1) % MAX_SENSORS;
   ((HTSigVal*)arg.sival_ptr)->busy = 0;

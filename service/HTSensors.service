@@ -1,0 +1,12 @@
+[Unit]
+Description=Head Tracking Sensor Scheduler
+
+[Service]
+User=pi
+Group=pi
+Type=simple
+ExecStart=/usr/bin/ht_service
+Restart=always
+
+[Install]
+WantedBy=default.target

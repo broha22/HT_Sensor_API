@@ -12,9 +12,9 @@
 #include "../../headers/HTSensors.h"
 
 /* Struct Declarations */
-#ifndef axis3bit16_t
-#define axis3bit16_t
-typedef union{
+#ifndef axis3bit16_tA
+#define axis3bit16_tA
+typedef union axis3bit16_t {
   int16_t i16bit[3];
   uint8_t u8bit[6];
 } axis3bit16_t;

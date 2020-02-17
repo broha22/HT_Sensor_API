@@ -38,18 +38,26 @@ SensorConfig* read_sensors(int *count) {
 }
 
 void write_config(SensorConfig config) {
+  SensorConfig c_config;
+  memcpy(&c_config, (SensorConfig *)shm_top + config.index, sizeof(SensorConfig));
+  while (c_config.command != 0 && c_config.command != HTC_WAIT) {
+    memcpy(&c_config, (SensorConfig *)shm_top + config.index, sizeof(SensorConfig));
+  }
   memcpy((SensorConfig *)shm_top + config.index, &config, sizeof(SensorConfig));
 }
 
 void clear_sensors() {
   SensorConfig config;
   for (int index = 0; index < MAX_SENSORS; index++) {
-    memset(&config, 0, sizeof(SensorConfig));
-    config.index = index;
-    config.command = HTC_DELETE;
-    write_config(config);
+    memcpy(&config, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
+    if (config.valid == 1) {
+      config.command = HTC_DELETE;
+      write_config(config);
+      while (config.command != 0) {
+        memcpy(&config, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
+      }
+    }
   }
-
 }
 
 
@@ -76,13 +84,10 @@ void load_sensors(const char *configFile) {
       switch (count_2) {
         case 0:
           if (strcmp(token, "BSH") == 0) {
-            printf("%d %s BSH", count, token);
             config.driver_library = BSH;
           } else if (strcmp(token, "LSM") == 0) {
-            printf("%d %s LSM", count, token);
             config.driver_library = LSM;
           } else if (strcmp(token, "NXP") == 0) {
-            printf("%d %s NXP", count, token);
             config.driver_library = NXP;
           }
           break;
@@ -122,7 +127,6 @@ void load_sensors(const char *configFile) {
       printf("Invalid config file \n");
     }
     config.index = count;
-    printf("index: %d d: %d", config.index, config.driver_library);
     write_config(config);
     count++;
   }

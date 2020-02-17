@@ -93,11 +93,11 @@ void read_sensor (SensorConfig *config) {
 }
 int main (int argc, char** argv) {
   /* Look at argv for shared memory name of sensor config */
-  if (argc != 1) {
+  if (argc != 2) {
     printf("Missing index %d \n", argc);
     return -1;
   }
-  char *index_string = argv[0];
+  char *index_string = argv[1];
   int index = strtol(index_string, NULL, 10);
 
   int shm_fd;
@@ -122,8 +122,9 @@ int main (int argc, char** argv) {
 
   /* Loop continuously */
   int loop = 1;
-  while (loop) {
+  while (loop == 1) {
     memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
+    int index_copy;
     switch (config.command) {
       case HTC_READ:
         read_sensor(&config);
@@ -131,9 +132,12 @@ int main (int argc, char** argv) {
         memcpy((SensorConfig *)config_ptr + index, &config, sizeof(SensorConfig));
         break;
       case HTC_DELETE:
+        index_copy = config.index;
         memset(&config, 0, sizeof(SensorConfig));
+        config.index = index_copy;
         memcpy((SensorConfig *)config_ptr + index, &config, sizeof(SensorConfig));
         loop = 0;
+        return 0;
         break;
       case HTC_SETUP:
         loop = 0;

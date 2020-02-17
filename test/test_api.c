@@ -76,8 +76,8 @@ int main (int argc, char** argv) {
     printf("\n");
   }
   free(reads);
-  clear_sensors();
-  read_shm();
+  // clear_sensors();
+  // read_shm();
   dealloc_ht_api();
   return 0;
 }
