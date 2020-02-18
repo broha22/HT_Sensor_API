@@ -69,5 +69,5 @@ test_bsh: bsh_support.o bsh.o test/test_bsh.c headers/HTSensors.h drivers/bsh/bn
 	gcc bsh.o bsh_support.o test/test_bsh.c -o bin/test_bsh
 
 clean:
-	rm bin/*
-	rm *.o
+	rm -f bin/*
+	rm -f *.o

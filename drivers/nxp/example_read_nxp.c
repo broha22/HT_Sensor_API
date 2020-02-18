@@ -26,7 +26,7 @@ int main() {
   nxp_acc.sensor_type = 1;
   nxp_acc.addr = 0x1F; 
   struct SensorConfig nxp_gyr;
-  nxp_gyr.sensor_type = 0;
+  nxp_gyr.sensor_type = Gyr;
   nxp_gyr.addr = 0x21;
   struct SensorConfig nxp_mag;
   nxp_mag.sensor_type = 2;

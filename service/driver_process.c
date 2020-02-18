@@ -67,6 +67,7 @@ void read_sensor (SensorConfig *config) {
       break;
     case Mag:
       toggle_e_magnet(1);
+      usleep(5000);
       switch (config->driver_library) {
         case BSH:
           reads = read_bsh_mag(config);
@@ -110,6 +111,10 @@ int main (int argc, char** argv) {
   /* Copy sensor config struct into memory */
   SensorConfig config;
   memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
+
+  if (wiringPiSetup () == -1)
+    return -1;
+  pinMode (E_MAG_PIN, OUTPUT);
 
   /* Run setup function for sensor */
   if (setup_sensor(&config) != 0) {

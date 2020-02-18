@@ -9,7 +9,7 @@
 #define READ_INTERVAL 1000000 // 1mS
 // #define READ_INTERVAL 600000000 // 600mS
 //#define READ_INTERVAL 500000000 // 500mS
-#define E_MAG_PIN 7
+#define E_MAG_PIN 29
 
 typedef struct HTSigVal {
 	unsigned int index;
