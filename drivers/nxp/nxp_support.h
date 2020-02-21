@@ -69,9 +69,6 @@ typedef union axis3bit16_t {
 static axis3bit16_t data_raw_accel;
 static axis3bit16_t data_raw_gyro;
 static axis3bit16_t data_raw_mag;
-//static double acceleration_mg[3];
-//static double angular_rate_mdps[3];
-//static double magnetic_field_mgauss[3];
 
 /* Platform specific read/write functions */
 static int32_t platform_write(void* handle, uint8_t reg, uint8_t* bufp, uint16_t len);

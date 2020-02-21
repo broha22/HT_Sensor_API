@@ -52,6 +52,7 @@ int configure_nxp(struct SensorConfig* nxp) {
   nxp->fd = fd;
 
   int ret = 0;
+  uint8_t mask;
   uint8_t write_buf;
   uint8_t read_buf;
 
@@ -64,27 +65,39 @@ int configure_nxp(struct SensorConfig* nxp) {
       return -1;
     }
 
-    /* Reset device */      
-    write_buf = 0x00; //[0] = 0b0 sets standby mode
+    /* Reset device
+     * [0] = Standy/active 0b0 sets standby
+     */      
+    write_buf = 0x00;
     ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
-    do { /* Wait for system mode to update to standy */
+    do { /* Wait for system mode to update to standby */
       platform_read(&fd, FXOS8700_SYSMOD, &read_buf, 1);
     }while ( (read_buf & 0x03) != 0x00);
     
-    /* Reset mag */
-    //[6] Magnetic one-shot reset
-    write_buf = 0x40;
+    /* Reset mag
+     * [6] Magnetic one-shot reset
+     */
+    uint8_t mag_reset = 0x40;
+    mask = 0x40;
+    platform_read(&fd, FXOS8700_M_CTRL_REG1, &read_buf, 1);
+    write_buf = ((read_buf & ~mask) | mag_reset);
     ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
 
     /* Set mode to accel + mag
      * [1:0] = 0b11 Hybrid mode (both sensors active)
      * [4:2] = 0b111 Max Over sampling rate (16)
      */
-    write_buf = 0x1F;
+    uint8_t mode_sel = 0x1F;
+    mask = 0x1F;
+    platform_read(&fd, FXOS8700_M_CTRL_REG1, &read_buf, 1);
+    write_buf = (mode_sel & (read_buf & mask));
     ret += platform_write(&fd, FXOS8700_M_CTRL_REG1, &write_buf, 1);
 
     /* Set up CTRL REG 2 for no auto-inc (change to 0x20 for auto-inc) */
-    write_buf = 0x00;
+    uint8_t auto_inc = 0x00;
+    mask = 0x20;
+    platform_read(&fd, FXOS8700_M_CTRL_REG2, &read_buf, 1);
+    write_buf = ((read_buf & ~mask) | auto_inc);
     ret += platform_write(&fd, FXOS8700_M_CTRL_REG2, &write_buf, 1);
 
 
@@ -94,13 +107,20 @@ int configure_nxp(struct SensorConfig* nxp) {
      * Mag range 500 dps
      * [4] HPF enable
      */
-    write_buf = 0x10;
+    uint8_t range_set = 0x10;
+    mask = 0x10;
+    platform_read(&fd, FXOS8700_XYZ_DATA_CFG, &read_buf, 1);
+    write_buf = ((read_buf & ~mask) | range_set);
     ret += platform_write(&fd, FXOS8700_XYZ_DATA_CFG, &write_buf, 1);
 
 
-    /* Set output data rates + set active */
-    // [3] Reduced noise mode enable
-    write_buf = 0x05;
+    /* Set output data rates + set active
+     * [3] Reduced noise mode enable
+     */
+    uint8_t red_noise = 0x05;
+    mask = 0x07;
+    platform_read(&fd, FXOS8700_CTRL_REG1, &read_buf, 1);
+    write_buf = ((read_buf & ~mask) | red_noise);
     ret += platform_write(&fd, FXOS8700_CTRL_REG1, &write_buf, 1);
 
   }
@@ -120,14 +140,34 @@ int configure_nxp(struct SensorConfig* nxp) {
     ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
     do {
       platform_read(&fd, FXAS21002_CTRLREG1, &read_buf, 1);
+      printf("Device in reset\n");
     }while (read_buf == 0x40);
 
-    /* Set range */
-    write_buf = 0x03;
+    /* Set range 500 dps
+     * [7:6] Low pass filter cut off freq
+     * [5] SPI interface mode
+     * [4:3] High pass filter cut off freq
+     * [2] High pass filter enable
+     * [1:0] Full scale range selection (0b10 = 500 dps)
+     */
+    //uint8_t range_set = 0x1E;
+    uint8_t range_set = 0x1C;
+    mask = 0xFF;
+    platform_read(&fd, FXAS21002_CTRLREG0, &read_buf, 1);
+    write_buf = ((read_buf & ~mask) | range_set);
     ret += platform_write(&fd, FXAS21002_CTRLREG0, &write_buf, 1);
     
-    /* Set ODR + set active */
-    write_buf = 0x02;
+    /* Set ODR + set active
+     * [6] Soft rst
+     * [5] Selftest enable
+     * [4:2] ODR 0b000 = 800 Hz
+     * [1] Set active active
+     * [0] Set standby mode
+     */
+    uint8_t odr_set = 0x02;
+    mask = 0x1F;
+    platform_read(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
+    write_buf = ((read_buf & ~mask) | odr_set);
     ret += platform_write(&fd, FXAS21002_CTRLREG1, &write_buf, 1);
 
   }
@@ -174,13 +214,14 @@ double* read_nxp_acc(struct SensorConfig* nxp) {
    * Range: 4g, Units: 0.488 mg/LSB 
    * Range: 8g, Units: 0.976 mg/LSB
    */
-  //acceleration_mg[0] = (double) undoComplement((data_raw_accel.i16bit[0] >> 2) * 0.244);
-  //acceleration_mg[1] = (double) undoComplement((data_raw_accel.i16bit[1] >> 2) * 0.244);
-  //acceleration_mg[2] = (double) undoComplement((data_raw_accel.i16bit[2] >> 2) * 0.244);
+  double conv_factor = 0.244;
+  *acceleration_mg = (double) undoComplement((data_raw_accel.i16bit[0] >> 2) * conv_factor);
+  *(acceleration_mg+1) = (double) undoComplement((data_raw_accel.i16bit[1] >> 2) * conv_factor);
+  *(acceleration_mg+2) = (double) undoComplement((data_raw_accel.i16bit[2] >> 2) * conv_factor);
 
-  *acceleration_mg = (double) (data_raw_accel.i16bit[0] >> 2) * 0.244;
-  *(acceleration_mg+1) = (double) (data_raw_accel.i16bit[1] >> 2) * 0.244;
-  *(acceleration_mg+2) = (double) (data_raw_accel.i16bit[2] >> 2) * 0.244;
+  //*acceleration_mg = (double) (data_raw_accel.i16bit[0] >> 2) * conv_factor;
+  //*(acceleration_mg+1) = (double) (data_raw_accel.i16bit[1] >> 2) * conv_factor;
+  //*(acceleration_mg+2) = (double) (data_raw_accel.i16bit[2] >> 2) * conv_factor;
       
   return acceleration_mg;
 }
@@ -215,13 +256,14 @@ double* read_nxp_acc(struct SensorConfig* nxp) {
    * Range: 500, Units: 15.625 mdps/LSB
    * Range: 250, Units: 7.8125 mdps/LSB
    */
-  //angular_rate_mdps[0] = (double) undoComplement(data_raw_gyro.i16bit[0] * 15.625);
-  //angular_rate_mdps[1] = (double) undoComplement(data_raw_gyro.i16bit[1] * 15.625);
-  //angular_rate_mdps[2] = (double) undoComplement(data_raw_gyro.i16bit[2] * 15.625);
+  double conv_factor = 62.5; //15.625
+  *angular_rate_mdps = (double) undoComplement(data_raw_gyro.i16bit[0] * conv_factor);
+  *(angular_rate_mdps+1) = (double) undoComplement(data_raw_gyro.i16bit[1] * conv_factor);
+  *(angular_rate_mdps+2) = (double) undoComplement(data_raw_gyro.i16bit[2] * conv_factor);
 
-  *angular_rate_mdps = (double) data_raw_gyro.i16bit[0] * 15.625;
-  *(angular_rate_mdps+1) = (double) data_raw_gyro.i16bit[1] * 15.625;
-  *(angular_rate_mdps+2) = (double) data_raw_gyro.i16bit[2] * 15.625;
+  //*angular_rate_mdps = (double) data_raw_gyro.i16bit[0] * conv_factor;
+  //*(angular_rate_mdps+1) = (double) data_raw_gyro.i16bit[1] * conv_factor;
+  //*(angular_rate_mdps+2) = (double) data_raw_gyro.i16bit[2] * conv_factor;
     
   return angular_rate_mdps;
  }
@@ -255,13 +297,13 @@ double* read_nxp_acc(struct SensorConfig* nxp) {
    * Raw data has resolution of 0.1 uT/LSB or 1 mG/LSB
    * No unit conversion necessary
    */
-  //magnetic_field_mgauss[0] = (double) undoComplement(data_raw_mag.i16bit[0]);
-  //magnetic_field_mgauss[1] = (double) undoComplement(data_raw_mag.i16bit[1]);
-  //magnetic_field_mgauss[2] = (double) undoComplement(data_raw_mag.i16bit[2]);
+  *magnetic_field_mgauss = (double) undoComplement(data_raw_mag.i16bit[0]) - 50000;
+  *(magnetic_field_mgauss+1) = (double) undoComplement(data_raw_mag.i16bit[1]) - 50000;
+  *(magnetic_field_mgauss+2) = (double) undoComplement(data_raw_mag.i16bit[2]) - 50000;
 
-  *magnetic_field_mgauss = (double) data_raw_mag.i16bit[0];
-  *(magnetic_field_mgauss+1) = (double) data_raw_mag.i16bit[1];
-  *(magnetic_field_mgauss+2) = (double) data_raw_mag.i16bit[2];
+  //*magnetic_field_mgauss = (double) data_raw_mag.i16bit[0];
+  //*(magnetic_field_mgauss+1) = (double) data_raw_mag.i16bit[1];
+  //*(magnetic_field_mgauss+2) = (double) data_raw_mag.i16bit[2];
 
   return magnetic_field_mgauss;
  }
