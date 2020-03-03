@@ -26,6 +26,8 @@ int main() {
   int result2 = configure_nxp(&nxp_gyr);
   int result3 = configure_nxp(&nxp_mag);
 
+  printf(" == Config complete == \n");
+  
   double nxp_acc_readings[3];
   double nxp_gyr_readings[3];
   double nxp_mag_readings[3];
@@ -53,7 +55,7 @@ int main() {
       nxp_mag_readings[0] = *(mag_return);
       nxp_mag_readings[1] = *(mag_return+1);
       nxp_mag_readings[2] = *(mag_return+2);
-
+      
       free(acc_return);
       free(gyr_return);
       free(mag_return);
@@ -66,7 +68,7 @@ int main() {
 
       printf("MAG - [mG]: x:%4.2f\ty:%4.2f\tz:%4.2f\r\n",
               nxp_mag_readings[0], nxp_mag_readings[1], nxp_mag_readings[2]);
- 
+      
       usleep(200 * 1000); // 200 ms
  
     }

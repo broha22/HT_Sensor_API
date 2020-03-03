@@ -6,13 +6,13 @@
 
 int main() {
   struct SensorConfig lsm_acc;
-  lsm_acc.sensor_type = 1;
+  lsm_acc.sensor_type = Acc;
   lsm_acc.addr = 0x6a;
   struct SensorConfig lsm_gyr;
-  lsm_gyr.sensor_type = 0;
+  lsm_gyr.sensor_type = Gyr;
   lsm_gyr.addr = 0x6a;
   struct SensorConfig lsm_mag;
-  lsm_mag.sensor_type = 2;
+  lsm_mag.sensor_type = Mag;
   lsm_mag.addr = 0x1c;
   
     

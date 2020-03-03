@@ -9,6 +9,7 @@
  */
 #include <stdlib.h>
 #include "lsm9ds1_reg.h"
+#include <wiringPiI2C.h>
 #include "../../headers/HTSensors.h"
 
 /* Struct Declarations */
