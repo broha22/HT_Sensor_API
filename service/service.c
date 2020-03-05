@@ -9,6 +9,31 @@
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 
+void toggle_e_magnet(int on) {
+  if (on == 1) {
+    digitalWrite(E_MAG_PIN, 1);
+  } else {
+    digitalWrite(E_MAG_PIN, 0);
+  }
+}
+
+void handle_timer_mag (union sigval arg) {
+  void *shm_top = ((HTSigVal*)arg.sival_ptr)->shm_top;
+  while (((HTSigVal*)arg.sival_ptr)->busy == 1) { usleep(10); }
+  ((HTSigVal*)arg.sival_ptr)->busy = 1;
+  SensorConfig current_cfg;
+  toggle_e_magnet(1);
+  for (int i = 0; i < MAX_SENSORS; i++) {
+    memcpy(&current_cfg, (SensorConfig *)shm_top + i, sizeof(SensorConfig));
+    if (current_cfg.sensor_type == Mag && current_cfg.fd != 0) {
+      current_cfg.command = HTC_READ;
+      memcpy((SensorConfig *)shm_top + i, &current_cfg, sizeof(SensorConfig));
+    }
+  }
+  toggle_e_magnet(0);
+  ((HTSigVal*)arg.sival_ptr)->busy = 0;
+}
+
 void handle_timer (union sigval arg) {
   if (((HTSigVal*)arg.sival_ptr)->busy == 1) {
     return;
@@ -41,20 +66,20 @@ void handle_timer (union sigval arg) {
   if (current_cfg.valid == 0) {
     current_cfg.command = HTC_SETUP;
     memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
-    pid = fork();
-    if (pid == 0) {
-      // child
-      char str[3]; // 99 sensors
-      sprintf(str, "%d", current_cfg.index);
-      if (execl(HT_DRIVER_PROCESS, HT_DRIVER_PROCESS, str, (char*)0) == -1) {
-        printf("Failed to spwan child %d\n", errno);
-      }
-    } else {
-      // parent
-      while (current_cfg.command != HTC_WAIT) {
-        memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
-      }
+    // pid = fork();
+    // if (pid == 0) {
+    //   // child
+    //   char str[3]; // 99 sensors
+    //   sprintf(str, "%d", current_cfg.index);
+    //   if (execl(HT_DRIVER_PROCESS, HT_DRIVER_PROCESS, str, (char*)0) == -1) {
+    //     printf("Failed to spwan child %d\n", errno);
+    //   }
+    // } else {
+    //   // parent
+    while (current_cfg.command != HTC_WAIT) {
+      memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
     }
+    // }
   }
   if (current_cfg.fd == 0) {
     printf("Failed to open sensor fd %d\n", current_cfg.index);
@@ -62,7 +87,7 @@ void handle_timer (union sigval arg) {
   }
   
   /* Continue processing sensor read */
-  if (current_cfg.command == HTC_WAIT) {
+  if (current_cfg.command == HTC_WAIT && current_cfg.sensor_type != Mag) {
     current_cfg.command = HTC_READ;
     memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
     while (current_cfg.command != HTC_WAIT && current_cfg.command != 0) {
@@ -131,8 +156,45 @@ int main (int argc, char **argv) {
     return errno;
   }
 
+  struct sigevent timer_fired_mag;
+  memset(&timer_fired_mag, 0, sizeof(struct sigevent));
+  timer_fired_mag.sigev_notify = SIGEV_THREAD;
+  timer_fired_mag.sigev_notify_function = handle_timer_mag;
+  timer_fired_mag.sigev_notify_attributes = NULL;
+  timer_fired_mag.sigev_value.sival_ptr = &event_arg;
+
+  /* Define timer interval */
+  struct itimerspec timer_interval_mag;
+  memset(&timer_interval_mag, 0, sizeof(struct itimerspec));
+  timer_interval_mag.it_interval.tv_sec = MAG_TRIGGER_INT;
+  timer_interval_mag.it_interval.tv_nsec = 0;
+  timer_interval_mag.it_value.tv_nsec = 1;
+  timer_interval_mag.it_value.tv_sec = 0;
+
+  timer_t timer_id_mag;
+  if (timer_create(CLOCK_REALTIME, &timer_fired_mag, &timer_id_mag)) {
+    return errno;
+  }
+  if (timer_settime(timer_id_mag, 0, &timer_interval_mag, NULL)) {
+    return errno;
+  }
+  /* Max sensors 18 if two childs specified */
+  for (int i = 0; i < MAX_CHILD_DRIVERS; i++) {
+    int pid = fork();
+    if (pid == 0) {
+      // child
+      char str[1]; // 9 sensors
+      sprintf(str, "%d", i * MAX_SENSORS / 2);
+      if (execl(HT_DRIVER_PROCESS, HT_DRIVER_PROCESS, str, (char*)0) == -1) {
+        printf("Failed to spwan child %d\n", errno);
+        return -1;
+      }
+    }
+  }
   /* Loop forever */
-  while(1){}
+  while(1){
+    usleep(10);
+  }
 
   // Probably should capture sigterm unlink this
   shm_unlink(shm_name);

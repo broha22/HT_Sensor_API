@@ -1,1 +1,3 @@
 BSH,Acc,0x28,0,0,0
+LSM,Acc,0x6A,0,0,0
+NXP,Acc,0x1F,0,0,0

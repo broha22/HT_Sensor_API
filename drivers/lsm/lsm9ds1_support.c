@@ -124,7 +124,7 @@ int configure_lsm(struct SensorConfig* lsm)
     return -1;
   }
   
-  return ret; //Return value indicates number of incorrectly performed functions
+  return 0; //Return value indicates number of incorrectly performed functions
 }
 
 /*

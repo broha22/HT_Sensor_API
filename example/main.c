@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
           strcpy(type, "ACC");
           break;
         case Mag:
-          strcpy(driver, "MAG");
+          strcpy(type, "MAG");
           break;
       }
       double time;

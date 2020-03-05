@@ -10,6 +10,7 @@
 // #define READ_INTERVAL 600000000 // 600mS
 //#define READ_INTERVAL 500000000 // 500mS
 #define E_MAG_PIN 29
+#define MAG_TRIGGER_INT 600 // Ten minutes
 
 typedef struct HTSigVal {
 	unsigned int index;

@@ -8,14 +8,6 @@
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 
-void toggle_e_magnet(int on) {
-  if (on == 1) {
-    digitalWrite(E_MAG_PIN, 1);
-  } else {
-    digitalWrite(E_MAG_PIN, 0);
-  }
-}
-
 int setup_sensor (SensorConfig *config) {
   switch (config->driver_library) {
     case BSH:
@@ -66,8 +58,6 @@ void read_sensor (SensorConfig *config) {
       }
       break;
     case Mag:
-      toggle_e_magnet(1);
-      usleep(5000);
       switch (config->driver_library) {
         case BSH:
           reads = read_bsh_mag(config);
@@ -81,7 +71,6 @@ void read_sensor (SensorConfig *config) {
         default:
           break;
       }
-      toggle_e_magnet(0);
       break;
     default:
       break;
@@ -100,6 +89,7 @@ int main (int argc, char** argv) {
   }
   char *index_string = argv[1];
   int index = strtol(index_string, NULL, 10);
+  int max_index = index + MAX_SENSORS / 2;
 
   int shm_fd;
   const int shm_size = (sizeof(SensorConfig) * MAX_SENSORS);
@@ -110,45 +100,42 @@ int main (int argc, char** argv) {
 
   /* Copy sensor config struct into memory */
   SensorConfig config;
-  memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
-
-  if (wiringPiSetup () == -1)
-    return -1;
-  pinMode (E_MAG_PIN, OUTPUT);
+  // memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
 
   /* Run setup function for sensor */
-  if (setup_sensor(&config) != 0) {
-    printf("Invalid sensor config \n");
-    return -1;
-  }
-  config.valid = 1;
-  config.command = HTC_WAIT;
-  memcpy((SensorConfig *)config_ptr + index, &config, sizeof(SensorConfig));
+  //
 
   /* Loop continuously */
   int loop = 1;
   while (loop == 1) {
-    memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
-    int index_copy;
-    switch (config.command) {
-      case HTC_READ:
-        read_sensor(&config);
-        config.command = HTC_WAIT;
-        memcpy((SensorConfig *)config_ptr + index, &config, sizeof(SensorConfig));
-        break;
-      case HTC_DELETE:
-        index_copy = config.index;
-        memset(&config, 0, sizeof(SensorConfig));
-        config.index = index_copy;
-        memcpy((SensorConfig *)config_ptr + index, &config, sizeof(SensorConfig));
-        loop = 0;
-        return 0;
-        break;
-      case HTC_SETUP:
-        loop = 0;
-        break;
-      default:
-        break;
+    for (int i = index; i < max_index; i++) {
+      memcpy(&config, (SensorConfig *)config_ptr + i, sizeof(SensorConfig));
+      int index_copy;
+      switch (config.command) {
+        case HTC_READ:
+          read_sensor(&config);
+          config.command = HTC_WAIT;
+          memcpy((SensorConfig *)config_ptr + i, &config, sizeof(SensorConfig));
+          break;
+        case HTC_DELETE:
+          index_copy = config.index;
+          memset(&config, 0, sizeof(SensorConfig));
+          config.index = index_copy;
+          memcpy((SensorConfig *)config_ptr + i, &config, sizeof(SensorConfig));
+          break;
+        case HTC_SETUP:
+            if (setup_sensor(&config) != 0) {
+              printf("Invalid sensor config \n");
+              config.command = HTC_DELETE;
+            } else {
+              config.valid = 1;
+              config.command = HTC_WAIT;
+            }
+            memcpy((SensorConfig *)config_ptr + i, &config, sizeof(SensorConfig));
+          break;
+        default:
+          break;
+      }
     }
   }
 

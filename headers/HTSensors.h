@@ -16,6 +16,7 @@
 /* Name used for shared memory space */
 #define SHM_NAME "HT_SENSORS_SHM"
 #define MAX_SENSORS 18
+#define MAX_CHILD_DRIVERS 2
 
 #include <time.h>
 
