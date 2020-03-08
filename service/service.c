@@ -23,13 +23,18 @@ void handle_timer_mag (union sigval arg) {
   ((HTSigVal*)arg.sival_ptr)->busy = 1;
   SensorConfig current_cfg;
   toggle_e_magnet(1);
+  usleep(500);
   for (int i = 0; i < MAX_SENSORS; i++) {
     memcpy(&current_cfg, (SensorConfig *)shm_top + i, sizeof(SensorConfig));
     if (current_cfg.sensor_type == Mag && current_cfg.fd != 0) {
       current_cfg.command = HTC_READ;
       memcpy((SensorConfig *)shm_top + i, &current_cfg, sizeof(SensorConfig));
+      while (current_cfg.command != HTC_WAIT) {
+        memcpy(&current_cfg, (SensorConfig *)shm_top + i, sizeof(SensorConfig));
+      }
     }
   }
+  usleep(500);
   toggle_e_magnet(0);
   ((HTSigVal*)arg.sival_ptr)->busy = 0;
 }
@@ -104,7 +109,7 @@ int main (int argc, char **argv) {
   /* Set up electromagnet pin for output */
   if (wiringPiSetup () == -1)
     return -1;
-  pinMode (E_MAG_PIN, OUTPUT);
+  pinMode(E_MAG_PIN, OUTPUT);
 
   /* Open shared memory and get variables ready */
   int shm_fd;

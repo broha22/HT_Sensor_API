@@ -182,7 +182,7 @@ int configure_nxp(struct SensorConfig* nxp) {
   /* Wait necessary transition time from standby to active time (6ms) */
   usleep(6 * 1000);
 
-  return ret;
+  return 0;
 }
 
 /*

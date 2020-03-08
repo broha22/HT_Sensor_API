@@ -42,12 +42,12 @@ int check_index(SensorConfig config) {
   int open_index = -1;
   for (int i = 0; i < MAX_SENSORS; i++) {
     memcpy(&c_config, (SensorConfig *)shm_top + i, sizeof(SensorConfig));
-    if (c_config.valid) {
+    if (c_config.addr) {
       if (c_config.driver_library == config.driver_library) {
         if (c_config.driver_library == BSH) {
           if (c_config.addr != config.addr) {
             if (i < MAX_SENSORS / 2) {
-              i = MAX_SENSORS / 2;
+              i = MAX_SENSORS / 2 - 1;
             } else {
               break;
             }
@@ -56,7 +56,7 @@ int check_index(SensorConfig config) {
           if ((c_config.sensor_type == Acc || c_config.sensor_type == Gyr) && (config.sensor_type == Acc || config.sensor_type == Gyr)) {
             if (c_config.addr != config.addr) {
               if (i < MAX_SENSORS / 2) {
-                i = MAX_SENSORS / 2;
+                i = MAX_SENSORS / 2 - 1;
               } else {
                 break;
               }
@@ -64,7 +64,7 @@ int check_index(SensorConfig config) {
           } else if (c_config.sensor_type == Mag && config.sensor_type == Mag) {
             if (c_config.addr != config.addr) {
               if (i < MAX_SENSORS / 2) {
-                i = MAX_SENSORS / 2;
+                i = MAX_SENSORS / 2 - 1;
               } else {
                 break;
               }
@@ -74,7 +74,7 @@ int check_index(SensorConfig config) {
           if ((c_config.sensor_type == Mag || c_config.sensor_type == Acc) && (config.sensor_type == Mag || config.sensor_type == Acc)) {
             if (c_config.addr != config.addr) {
               if (i < MAX_SENSORS / 2) {
-                i = MAX_SENSORS / 2;
+                i = MAX_SENSORS / 2 - 1;
               } else {
                 break;
               }
@@ -82,7 +82,7 @@ int check_index(SensorConfig config) {
           } else if (c_config.sensor_type == Gyr && config.sensor_type == Gyr) {
             if (c_config.addr != config.addr) {
               if (i < MAX_SENSORS / 2) {
-               i = MAX_SENSORS / 2;
+               i = MAX_SENSORS / 2 - 1;
               } else {
                break;
               }
@@ -93,7 +93,7 @@ int check_index(SensorConfig config) {
     } else {
       open_index = i;
     }
-    if (i == MAX_SENSORS / 2 && open_index >= 0) {
+    if (open_index >= 0) {
       break;
     }
   }
@@ -132,7 +132,6 @@ void load_sensors(const char *configFile) {
   }
   char *buffer = NULL;
   size_t len = 0;
-
   while (getline(&buffer, &len, f_ptr) != -1) {
     char *token;
     buffer[strlen(buffer) - 1] = '\0';
@@ -193,6 +192,7 @@ void load_sensors(const char *configFile) {
       printf("An Index wsnt found, clear sensors before loading a new config");
     }
     config.index = index;
+    printf("%d \n", config.index);
     write_config(config);
   }
   free(buffer);
