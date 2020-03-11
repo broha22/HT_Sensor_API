@@ -1,0 +1,13 @@
+/*
+ * @Author: you@you.you
+ * @Date:   Tuesday March 10th 2020
+ * @Last Modified By:  Brogan Miner
+ * @Last Modified Time:  Tuesday March 10th 2020
+ * @Copyright:  (c) Oregon State University 2020
+ */
+BSH,Acc,0x28,0,0,0
+LSM,Acc,0x6A,0,0,0
+NXP,Acc,0x1F,0,0,0
+BSH,Mag,0x28,0,0,0
+LSM,Mag,0x1C,0,0,0
+NXP,Mag,0x1F,0,0,0
