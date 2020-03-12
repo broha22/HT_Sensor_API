@@ -1,22 +1,14 @@
 const Net = require('net')
 const Express = require('express')
 const App = Express()
-const Server = app.listen(3000)
-const io = require('socket.io').listen(Server)
+const server = App.listen(3000)
+const io = require('socket.io').listen(server)
 const Cors = require('cors')
-const MySQL = require('mysql')
+const path = require('path')
 const BodyParser = require('body-parser')
 
 App.use(BodyParser.urlencoded({ extended: false }))
 App.use(BodyParser.json())
-
-const DB = MySQL.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'raspberry',
-  port: 3306,
-  database: 'sensor_data'
-})
 
 function queryDB(sql, args) {
   return new Promise((resolve, reject) => {
@@ -28,38 +20,53 @@ function queryDB(sql, args) {
 }
 
 App.use(Cors({ origin: true, credentials: true }))
+App.use(Express.static('../front_end/dist'))
+App.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../front_end/dist/index.html'))
+})
 
 const tcpClient = new Net.Socket()
-tcpClient.connect(1337, '127.0.0.1', function() { /* ... */ })
+tcpClient.connect(1337, 'pizero.local', function() { 
+ /* ... */
+})
 
 const SensorLibrary = ["LSM", "NXP", "Bosch"]
 const SensorType = ["Accelerometer", "Magnetometer", "Gyroscope"]
 
 let JSONReads = []
-let count = 0
-let expected = 0
+let runningText = ''
 tcpClient.on('data', function (data) {
-	if (count === 0 && data.search(/^START/gi)) {
-    expected = parseInt(data.split(',')[1])
-  } else { 
-    let dataArray = data.split(',')
-    JSONReads.push({
-      library: SensorLibrary[parseInt(dataArray[0]) - 1],
-      sensor: SensorType[parseInt(dataArray[1]) - 1],
-      x: parseFloat(dataArray[2]),
-      y: parseFloat(dataArray[3]),
-      z: parseFloat(dataArray[4]),
-      time: parseInt(dataArray[5]) * 60000 + parseInt(dataArray[6]) / 1000000 
-    })
-  }
+  const dataString = data.toString('utf8').replace(/\0/g, '')
+  let endSplit = dataString.split('END')
+  runningText += endSplit[0]
+  if (endSplit.length > 1 || dataString.search('END') >= 0) {
+    const rows = runningText.split('\n')
+    for (let r in rows) {
+      const cols = rows[r].split(',')
+      if (r == rows.length - 1) {
+        io.of('/').emit('data', JSON.stringify(JSONReads))
 
-  if (count === expected && data.search(/^END/gi)) {
-    count = 0
-    expected = 0
-    io.emit(JSON.stringify(JSONReads))
-    JSONReads = []
-  } else {
-    throw new Error("Socket Didn't send all the info :(")
+        count = 0
+        expected = 0
+        JSONReads = []
+        runningText = ''
+        if (endSplit.length > 1) {
+          runningText += endSplit
+        }
+      } else if (r !== 0) {
+        if (cols.length === 8) {
+          JSONReads.push({
+            id: parseInt(cols[7].trim()),
+            library: SensorLibrary[parseInt(cols[0].trim()) - 1],
+            sensor: SensorType[parseInt(cols[1].trim()) - 1],
+            x: parseFloat(cols[2].trim()),
+            y: parseFloat(cols[3].trim()),
+            z: parseFloat(cols[4].trim()),
+            time: Math.floor(parseInt(cols[5].trim()) * 1000 + parseInt(cols[6]) / 1000000)
+          })
+        }
+      }
+    }
   }
 })
 
@@ -67,12 +74,19 @@ tcpClient.on('close', function () {
   /* ... */
 })
 
+
 io.on('connection', client => {
+  // io.of('/').emit('test', 'Test')
+  // client.emit('test', 'test')
   client.on('event', data => { 
-    let dataJSON = JSON.stringify(data)
-    if (dataJSON.event === 'read') {
+    if (data.trim() === 'read') {
       tcpClient.write('read')
     }
   })
+  // console.log(io.sockets.name)
   client.on('disconnect', () => { /* … */ })
+})
+
+App.on('listening', () => {
+  console.log('Server Listening')
 })

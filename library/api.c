@@ -192,7 +192,6 @@ void load_sensors(const char *configFile) {
       printf("An Index wsnt found, clear sensors before loading a new config");
     }
     config.index = index;
-    printf("%d \n", config.index);
     write_config(config);
   }
   free(buffer);

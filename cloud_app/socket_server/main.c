@@ -14,46 +14,50 @@
 #include <stdlib.h> 
 #include <netinet/in.h> 
 #include <string.h> 
+#include <sys/time.h>
 #define PORT 1337
-#define MAX 2048
+#define MAX 1024
 void read_client(int sockfd) { 
   char buff[MAX]; 
   // infinite loop for chat 
-  for (;;) { 
+  int n;
+  while (1) { 
     bzero(buff, MAX); 
 
     // read the message from client and copy it in buffer 
-    read(sockfd, buff, sizeof(buff)); 
-    // print buffer which contains the client contents 
-    printf("From client: %s\t To client : ", buff); 
-    bzero(buff, MAX); 
-    if (strncmp("read", buff, 4) == 0) {
-      bzero(buff, MAX);
-      int sensor_count;
-      SensorConfig* sensors = read_sensors(&sensor_count);
-      sprintf(buff, "START,%d\n", sensor_count);
-      write(sockfd, buff, sizeof(buff));
-      for (int i = 0; i < sensor_count; i++) {
+    read(sockfd, buff, MAX); 
+    if (strlen(buff) != 0) {
+
+      if (strncmp("read", buff, 4) == 0) {
+        int sensor_count;
+        SensorConfig* sensors = read_sensors(&sensor_count);
         bzero(buff, MAX);
-        sprintf(buff, "%d,%d,%f,%f,%f,%d,%lu\n",sensors[i].driver_library, 
-                                                sensors[i].sensor_type,
-                                                sensors[i].last_read.x,
-                                                sensors[i].last_read.y,
-                                                sensors[i].last_read.z,
-                                                (int)sensors[i].last_read.time.tv_spec,
-                                                sensors[i].last_read.time.tv_nsec);
-        write(sockfd, buff, sizeof(buff));
-      }
-      free(sensors);
-      bzero(buff, MAX);
-      sprintf(buff, "END\n");
-      write(sockfd, buff, sizeof(buff));
+        sprintf(buff, "START,%d\n", sensor_count);
+        write(sockfd, buff, MAX);
+        for (int i = 0; i < sensor_count; i++) {
+          bzero(buff, MAX);
+          printf("%u\n", sensors[i].index);
+          sprintf(buff, "%d,%d,%f,%f,%f,%d,%lu,%u\n",sensors[i].driver_library, 
+                                                  sensors[i].sensor_type,
+                                                  sensors[i].last_read.x,
+                                                  sensors[i].last_read.y,
+                                                  sensors[i].last_read.z,
+                                                  (int)sensors[i].last_read.time.tv_sec,
+                                                  sensors[i].last_read.time.tv_nsec,
+                                                  sensors[i].index);
+          write(sockfd, buff, MAX);
+        }
+        
+        free(sensors);
+        bzero(buff, MAX);
+        
+        sprintf(buff, "END\n");
+        write(sockfd, buff, MAX);
+      } else if (strncmp("exit", buff, 4) == 0) { 
+          printf("Server Exit...\n"); 
+          break; 
+      } 
     }
-    
-    if (strncmp("exit", buff, 4) == 0) { 
-        printf("Server Exit...\n"); 
-        break; 
-    } 
   }
 }
 
@@ -85,13 +89,16 @@ int main(int argc, char** argv) {
   // Forcefully attaching socket to the port 8080 
   if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) { 
       exit(EXIT_FAILURE); 
-  } 
-  if (listen(server_fd, 3) < 0) { 
-      exit(EXIT_FAILURE); 
-  } 
+  }
+
+  if (listen(server_fd, 3) < 0) {   
+    perror("listen");   
+    exit(EXIT_FAILURE);   
+  }
   if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) { 
       exit(EXIT_FAILURE); 
-  } 
+  }
   read_client(new_socket);
   close(new_socket);
+  exit(0);
 }
