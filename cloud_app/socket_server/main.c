@@ -27,14 +27,30 @@ void read_client(int sockfd) {
     // read the message from client and copy it in buffer 
     read(sockfd, buff, MAX); 
     if (strlen(buff) != 0) {
-
+      
+      // check if client sent read command
       if (strncmp("read", buff, 4) == 0) {
         int sensor_count;
-        SensorConfig* sensors = read_sensors(&sensor_count);
+        SensorConfig* sensors = read_sensors(&sensor_count); //read sensors
         bzero(buff, MAX);
+        /*  message format looks like this:
+            
+            START,N
+            LIB,TYP,X,Y,Z,S,NS,I
+            END
+
+            for N sensors
+            LIB is library
+            TYP is type
+            X is x axis reading
+            Y is y axis reading
+            Z is z axis reading
+            S is seconds
+            NS is nanoseconds
+        */
         sprintf(buff, "START,%d\n", sensor_count);
-        write(sockfd, buff, MAX);
-        for (int i = 0; i < sensor_count; i++) {
+        write(sockfd, buff, MAX); //write each line
+        for (int i = 0; i < sensor_count; i++) { //loop through each sensor
           bzero(buff, MAX);
           printf("%u\n", sensors[i].index);
           sprintf(buff, "%d,%d,%f,%f,%f,%d,%lu,%u\n",sensors[i].driver_library, 
@@ -48,11 +64,13 @@ void read_client(int sockfd) {
           write(sockfd, buff, MAX);
         }
         
-        free(sensors);
+        free(sensors); //free allocated array
         bzero(buff, MAX);
         
         sprintf(buff, "END\n");
         write(sockfd, buff, MAX);
+
+      //exit condition
       } else if (strncmp("exit", buff, 4) == 0) { 
           printf("Server Exit...\n"); 
           break; 
@@ -62,10 +80,12 @@ void read_client(int sockfd) {
 }
 
 int main(int argc, char** argv) {
+  /* Start Sensor API, clear any sensors on shm and load new config */
   init_ht_api();
   clear_sensors();
   load_sensors("/home/pi/HT_Sensor_API/cloud_app/config.txt");
   
+  //Begin setting up TCP Socket server
   int server_fd, new_socket, valread; 
   struct sockaddr_in address; 
   int opt = 1; 
@@ -90,14 +110,17 @@ int main(int argc, char** argv) {
   if (bind(server_fd, (struct sockaddr *)&address, sizeof(address))<0) { 
       exit(EXIT_FAILURE); 
   }
-
+  //Start listening for connections
   if (listen(server_fd, 3) < 0) {   
     perror("listen");   
     exit(EXIT_FAILURE);   
   }
+  /* TODO: make this work more than once */
+  //Accept next connection
   if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen))<0) { 
       exit(EXIT_FAILURE); 
   }
+  //begin client read loop
   read_client(new_socket);
   close(new_socket);
   exit(0);

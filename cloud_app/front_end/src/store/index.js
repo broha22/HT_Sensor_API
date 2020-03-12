@@ -24,6 +24,8 @@ Vue.use(Vuex)
  ]
 */
 
+//create state as function so it is always created with
+//these values and not copied
 const state = () => {
   return {
     sensors: [],
@@ -51,10 +53,12 @@ const store = {
     timer: (state) => {
       return state.timer
     },
+    //Gets the data for the sensor in chart.js format
     sensorData: (state) => (id) => {
       const sensorReads = state.sensors[id].reads
       const dataCollection = {
         labels: [],
+        //for each axis assign label and color then map the sensor data
         datasets: [{
           label: 'X',
           backgroundColor: '#688bff',
@@ -77,6 +81,7 @@ const store = {
           data: sensorReads.map(o => { return { x: o.time, y: o.z } })
         }]
       }
+      //return the chart.js format data
       return dataCollection
     }
   },
@@ -89,6 +94,7 @@ const store = {
     },
     updateSensor: (state, payload) => {
       const timeMap = state.sensors[payload.ind].reads.map(o => o.time)
+      //check if the data already exists and only upload the new data
       if (timeMap.indexOf(payload.time) < 0) {
         state.sensors[payload.ind].reads.push({
           x: payload.x,
@@ -109,6 +115,7 @@ const store = {
   },
   actions: {
     beginUpdating: (store) => {
+      //set a dispatch timer to poll new datas
       if (!store.getters.updating) {
         let fn = () => {
           store.dispatch('updateSensors')
@@ -118,19 +125,28 @@ const store = {
       }
     },
     stopUpdating: (store) => {
+      //stop the dispatch timer and remove the data
       clearTimeout(store.getters.timer)
       store.commit('setTimer', null)
       store.commit('clearReads')
     },
     updateSensors: (store) => {
+      //send the read command to the web socket
       store.getters.socket.emit('event', 'read')
+
+      //wrap the websocket response in a promise
       return new Promise((resolve) => {
         store.getters.socket.on('data', data => {
+
+            //Parse string response form WS
             const response = JSON.parse(data)
+            //Get current ids of sensors
             const sensorMap = store.getters.sensors.map(o => o.id)
+            //loop through each sensor of WS response
             for (let sensor of response) {
               const ind = sensorMap.indexOf(sensor.id)
               if (ind >= 0) {
+                //senosr exists so just add a read
                 store.commit('updateSensor', {
                   ind: ind,
                   x: sensor.x,
@@ -139,6 +155,7 @@ const store = {
                   time: sensor.time
                 })
               } else {
+                //sensor doesnt exist so create it
                 store.commit('addSensor', {
                   id: sensor.id,
                   library: sensor.library,
@@ -152,6 +169,7 @@ const store = {
                 })
               }
             }
+            //resolve the promise because we went through all the data
             resolve()
           })
       })

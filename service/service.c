@@ -9,6 +9,8 @@
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 
+//this function is used to turn off/on gpio connecting
+//the emag relay
 void toggle_e_magnet(int on) {
   if (on == 1) {
     digitalWrite(E_MAG_PIN, 1);
@@ -17,16 +19,24 @@ void toggle_e_magnet(int on) {
   }
 }
 
+//this function serves an input for the emag read timer
 void handle_timer_mag (union sigval arg) {
   void *shm_top = ((HTSigVal*)arg.sival_ptr)->shm_top;
+  //make sure another timer event isnt running
   while (((HTSigVal*)arg.sival_ptr)->busy == 1) { usleep(10); }
-  ((HTSigVal*)arg.sival_ptr)->busy = 1;
+  ((HTSigVal*)arg.sival_ptr)->busy = 1; //set this event loop to process
   SensorConfig current_cfg;
-  toggle_e_magnet(1);
-  usleep(500);
+
+  //turn on the emag
+  toggle_e_magnet(1); 
+  usleep(500); //add extra time
+
+  //do a read update for each magnetic sensor connected
   for (int i = 0; i < MAX_SENSORS; i++) {
     memcpy(&current_cfg, (SensorConfig *)shm_top + i, sizeof(SensorConfig));
-    if (current_cfg.sensor_type == Mag && current_cfg.fd != 0) {
+    if (current_cfg.sensor_type == Mag && current_cfg.fd != 0) { //check for valid mag sensors
+      
+      //send the read command and wait for completition
       current_cfg.command = HTC_READ;
       memcpy((SensorConfig *)shm_top + i, &current_cfg, sizeof(SensorConfig));
       while (current_cfg.command != HTC_WAIT) {
@@ -34,16 +44,19 @@ void handle_timer_mag (union sigval arg) {
       }
     }
   }
-  usleep(500);
+
+  usleep(500); //add extra time
   toggle_e_magnet(0);
-  ((HTSigVal*)arg.sival_ptr)->busy = 0;
+  ((HTSigVal*)arg.sival_ptr)->busy = 0; //release event lock loop
 }
 
+
+//handle the event timer for non magnetic sensors
 void handle_timer (union sigval arg) {
   if (((HTSigVal*)arg.sival_ptr)->busy == 1) {
     return;
   }
-  ((HTSigVal*)arg.sival_ptr)->busy = 1;
+  ((HTSigVal*)arg.sival_ptr)->busy = 1; //lock to this timer
   /* Read arg ptr into values */
   unsigned int index = ((HTSigVal*)arg.sival_ptr)->index;
   unsigned int index_copy = index;
@@ -71,20 +84,9 @@ void handle_timer (union sigval arg) {
   if (current_cfg.valid == 0) {
     current_cfg.command = HTC_SETUP;
     memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
-    // pid = fork();
-    // if (pid == 0) {
-    //   // child
-    //   char str[3]; // 99 sensors
-    //   sprintf(str, "%d", current_cfg.index);
-    //   if (execl(HT_DRIVER_PROCESS, HT_DRIVER_PROCESS, str, (char*)0) == -1) {
-    //     printf("Failed to spwan child %d\n", errno);
-    //   }
-    // } else {
-    //   // parent
     while (current_cfg.command != HTC_WAIT) {
       memcpy(&current_cfg, (SensorConfig *)shm_top + index, sizeof(SensorConfig));
     }
-    // }
   }
   if (current_cfg.fd == 0) {
     printf("Failed to open sensor fd %d\n", current_cfg.index);
@@ -92,6 +94,8 @@ void handle_timer (union sigval arg) {
   }
   
   /* Continue processing sensor read */
+  //do not read mag sensors
+  //make sure sensor is not busy
   if (current_cfg.command == HTC_WAIT && current_cfg.sensor_type != Mag) {
     current_cfg.command = HTC_READ;
     memcpy((SensorConfig *)shm_top + index, &current_cfg, sizeof(SensorConfig));
@@ -161,6 +165,7 @@ int main (int argc, char **argv) {
     return errno;
   }
 
+  /* Define magnet sensor timer interval */
   struct sigevent timer_fired_mag;
   memset(&timer_fired_mag, 0, sizeof(struct sigevent));
   timer_fired_mag.sigev_notify = SIGEV_THREAD;

@@ -1,9 +1,0 @@
-BSH,Gyr,0x01,0,0,0
-BSH,Acc,0x02,0,90,0
-BSH,Mag,0x03,-90,0,0
-LSM,Gyr,0x04,0,0,0
-LSM,Acc,0x05,0,0,180
-LSM,Mag,0x06,0,0,0
-NXP,Gyr,0x06,0,90,0
-NXP,Acc,0x07,0,0,0
-NXP,Mag,0x09,0,0,0

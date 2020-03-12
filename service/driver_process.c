@@ -8,6 +8,8 @@
 #include "../headers/HTSensors.h"
 #include "../headers/HTReadScheduler.h"
 
+//runs config command for sensor based on
+//driver library
 int setup_sensor (SensorConfig *config) {
   switch (config->driver_library) {
     case BSH:
@@ -25,8 +27,9 @@ int setup_sensor (SensorConfig *config) {
   return 0;
 }
 
+//read sensor for type and library
 void read_sensor (SensorConfig *config) {
-  double* reads;
+  double* reads; //reads is allocated in sensor lib by spec
   switch (config->sensor_type) {
     case Gyr:
       switch (config->driver_library) {
@@ -75,10 +78,11 @@ void read_sensor (SensorConfig *config) {
     default:
       break;
   }
+  //put reads into sensor config
   config->last_read.x = reads[0];
   config->last_read.y = reads[1];
   config->last_read.z = reads[2];
-  free(reads);
+  free(reads); //reads is allocated in sensor lib by spec
   clock_gettime(CLOCK_REALTIME, &config->last_read.time);
 }
 int main (int argc, char** argv) {
@@ -87,10 +91,12 @@ int main (int argc, char** argv) {
     printf("Missing index %d \n", argc);
     return -1;
   }
+  //Convert string to integer
   char *index_string = argv[1];
   int index = strtol(index_string, NULL, 10);
   int max_index = index + MAX_SENSORS / 2;
 
+  //open up the shared memory stuff
   int shm_fd;
   const int shm_size = (sizeof(SensorConfig) * MAX_SENSORS);
   const char *shm_name = SHM_NAME;
@@ -98,36 +104,32 @@ int main (int argc, char** argv) {
   ftruncate(shm_fd, shm_size);
   void *config_ptr = mmap(0, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 
-  /* Copy sensor config struct into memory */
   SensorConfig config;
-  // memcpy(&config, (SensorConfig *)config_ptr + index, sizeof(SensorConfig));
-
-  /* Run setup function for sensor */
-  //
-
   /* Loop continuously */
   int loop = 1;
   while (loop == 1) {
-    for (int i = index; i < max_index; i++) {
-      memcpy(&config, (SensorConfig *)config_ptr + i, sizeof(SensorConfig));
+    for (int i = index; i < max_index; i++) { //loop through shm from spec index (0-8 or 9-18)
+      memcpy(&config, (SensorConfig *)config_ptr + i, sizeof(SensorConfig)); //copy in current sensor
       int index_copy;
-      switch (config.command) {
-        case HTC_READ:
+      switch (config.command) { //switch through sensor commands
+        case HTC_READ: //sensor read
           read_sensor(&config);
+          //reset the command flag
           config.command = HTC_WAIT;
           memcpy((SensorConfig *)config_ptr + i, &config, sizeof(SensorConfig));
           break;
-        case HTC_DELETE:
+        case HTC_DELETE: //remove the sensor from the shm
           index_copy = config.index;
-          memset(&config, 0, sizeof(SensorConfig));
-          config.index = index_copy;
+          memset(&config, 0, sizeof(SensorConfig)); //clear our config
+          config.index = index_copy; //set the index back and write it to shm
           memcpy((SensorConfig *)config_ptr + i, &config, sizeof(SensorConfig));
           break;
-        case HTC_SETUP:
+        case HTC_SETUP: //set up the sensor
             if (setup_sensor(&config) != 0) {
               printf("Invalid sensor config \n");
-              config.command = HTC_DELETE;
+              config.command = HTC_DELETE; //something bad happened and we should remove the invalid sensor
             } else {
+              //set the sensor valid and reset command
               config.valid = 1;
               config.command = HTC_WAIT;
             }
@@ -138,7 +140,7 @@ int main (int argc, char** argv) {
       }
     }
   }
-
+  //unreachable
   shm_unlink(shm_name);
   return 0;
 }
