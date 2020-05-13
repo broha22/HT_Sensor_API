@@ -123,6 +123,6 @@ typedef struct SensorConfig {
 SensorConfig* read_sensors(int *count);
 void clear_sensors();
 void load_sensors(const char* configFile);
-void init_ht_api();
+int init_ht_api();
 void dealloc_ht_api();
 #endif

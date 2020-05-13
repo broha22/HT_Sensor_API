@@ -76,6 +76,7 @@ tcpClient.on('data', function (data) {
             z: parseFloat(cols[4].trim()),
             time: Math.floor(parseInt(cols[5].trim()) * 1000 + parseInt(cols[6]) / 1000000)
           })
+          console.log(JSONReads)
         }
       }
     }

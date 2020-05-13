@@ -52,7 +52,7 @@ void read_client(int sockfd) {
         write(sockfd, buff, MAX); //write each line
         for (int i = 0; i < sensor_count; i++) { //loop through each sensor
           bzero(buff, MAX);
-          printf("%u\n", sensors[i].index);
+          // printf("%u\n", sensors[i].index);
           sprintf(buff, "%d,%d,%f,%f,%f,%d,%lu,%u\n",sensors[i].driver_library, 
                                                   sensors[i].sensor_type,
                                                   sensors[i].last_read.x,
@@ -84,7 +84,6 @@ int main(int argc, char** argv) {
   init_ht_api();
   clear_sensors();
   load_sensors("/home/pi/HT_Sensor_API/cloud_app/config.txt");
-  
   //Begin setting up TCP Socket server
   int server_fd, new_socket, valread; 
   struct sockaddr_in address; 

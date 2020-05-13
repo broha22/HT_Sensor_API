@@ -1,16 +1,16 @@
 system=1
-all: api service
+all: api driver_process
 	$(eval system=1)
 
 install: all
-	systemctl stop HTSensors
+	# systemctl stop HTSensors
 	cp bin/driver_process /usr/bin/ht_driver_process
-	cp bin/service /usr/bin/ht_service
+	# cp bin/service /usr/bin/ht_service
 	cp bin/libHTApi.so /usr/lib/libHTApi.so
 	cp headers/HTSensors.h /usr/include/HTSensors.h
-	cp service/HTSensors.service /etc/systemd/system/HTSensors.service
-	systemctl daemon-reload
-	systemctl start HTSensors.service
+	# cp service/HTSensors.service /etc/systemd/system/HTSensors.service
+	# systemctl daemon-reload
+	# systemctl start HTSensors.service
 
 api: api.o
 	ar rcs bin/libHTApi.so api.o
@@ -27,25 +27,27 @@ mock_lsm.o: drivers/mock/lsm.c drivers/lsm/lsm9ds1_support.h headers/HTSensors.h
 driver_process.o: service/driver_process.c headers/HTSensors.h headers/HTReadScheduler.h
 	gcc -c service/driver_process.c
 
-service.o: service/service.c headers/HTSensors.h headers/HTReadScheduler.h
-ifeq ($(system),1)
-	echo "I made the right one"
-	gcc -DHT_DRIVER_PROCESS=\"/usr/bin/ht_driver_process\" -c service/service.c
-else
-	gcc  -DHT_DRIVER_PROCESS=\"./driver_process\" -c service/service.c
-endif
+# service.o: service/service.c headers/HTSensors.h headers/HTReadScheduler.h
+# ifeq ($(system),1)
+# 	echo "I made the right one"
+# 	gcc -DHT_DRIVER_PROCESS=\"/usr/bin/ht_driver_process\" -c service/service.c
+# else
+# 	gcc  -DHT_DRIVER_PROCESS=\"./driver_process\" -c service/service.c
+# endif
 
 test_service: mock_bsh.o mock_nxp.o mock_lsm.o service.o driver_process.o
 	gcc mock_lsm.o mock_bsh.o mock_nxp.o driver_process.o -o bin/driver_process -lrt -lwiringPi
 	gcc service.o -o bin/service -lrt -lwiringPi
 	gcc test/test_service.c -o bin/test_service -lrt
 
-service: bsh.o lsm.o bsh_support.o nxp_support.o lsm_support.o service.o driver_process.o
+driver_process: bsh.o lsm.o bsh_support.o nxp_support.o lsm_support.o driver_process.o
 	gcc lsm.o bsh.o nxp_support.o bsh_support.o lsm_support.o driver_process.o -o bin/driver_process -lrt -lwiringPi
-	gcc service.o -o bin/service -lrt -lwiringPi
+# service: bsh.o lsm.o bsh_support.o nxp_support.o lsm_support.o service.o driver_process.o
+# 	gcc lsm.o bsh.o nxp_support.o bsh_support.o lsm_support.o driver_process.o -o bin/driver_process -lrt -lwiringPi
+# 	gcc service.o -o bin/service -lrt -lwiringPi
 
 api.o: library/api.c headers/HTSensors.h
-	gcc -c library/api.c
+	gcc -DHT_DRIVER_PROCESS=\"/usr/bin/ht_driver_process\" -c library/api.c
 
 test_api: api.o test/test_api.c
 	gcc api.o test/test_api.c -o bin/test_api -lrt
